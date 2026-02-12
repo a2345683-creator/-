@@ -3,16 +3,9 @@ import random
 import requests
 from bs4 import BeautifulSoup
 from flask import Flask, request, abort
-
-from linebot import (
-    LineBotApi, WebhookHandler
-)
-from linebot.exceptions import (
-    InvalidSignatureError
-)
-from linebot.models import (
-    MessageEvent, TextMessage, TextSendMessage,
-)
+from linebot import LineBotApi, WebhookHandler
+from linebot.exceptions import InvalidSignatureError
+from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
 app = Flask(__name__)
 
@@ -26,46 +19,44 @@ def get_random_law_from_web():
         
         response = requests.get(url, headers=headers)
         if response.status_code != 200:
-            return "連線失敗，請檢查網路。"
+            return "連線失敗，請稍後再試。"
 
         soup = BeautifulSoup(response.text, 'html.parser')
-        # 抓取所有法條區塊
-        blocks = soup.find_all('div', class_='law-article')
+        # 抓取所有法條主區塊
+        blocks = soup.select('div.law-article')
         
         valid_laws = []
         for b in blocks:
-            # --- 暴力解碼：抓取區塊內所有的 div 子層 ---
-            divs = b.find_all('div', recursive=False)
+            # --- 核心修正：精準抓取條號與內容標籤 ---
+            # line-0000 是條號，line-0002 是法條內文
+            no_tag = b.select_one('.line-0000')
+            content_tags = b.select('.line-0002')
             
-            # 只要有兩個以上的格子，就一定有條號跟內容
-            if len(divs) >= 2:
-                # 第一個格子就是條號 (例如：第 38-3 條)
-                no_text = divs[0].get_text(strip=True)
+            if no_tag and content_tags:
+                no_text = no_tag.get_text(strip=True)
                 
-                # 後面所有的格子通通接起來當內容，並強制換行
-                content_list = [d.get_text(strip=True) for d in divs[1:] if d.get_text(strip=True)]
-                full_content = "\n".join(content_list)
+                # 處理每一項內容，確保 1, 2, 3 會換行
+                content_lines = []
+                for ct in content_tags:
+                    text = ct.get_text(strip=True)
+                    if text:
+                        # 如果是純數字項次，稍微美化它
+                        if text.isdigit():
+                            content_lines.append(f"\n({text})")
+                        else:
+                            content_lines.append(text)
                 
-                # 只要條號有「第」這個字，就存進清單
+                full_content = "\n".join(content_lines).replace("\n\n", "\n").strip()
+                
                 if "第" in no_text and len(full_content) > 5:
                     valid_laws.append({"no": no_text, "content": full_content})
 
         if not valid_laws:
-            # 如果還是失敗，嘗試抓取表格 row 模式
-            rows = soup.find_all('div', class_='row')
-            for r in rows:
-                cols = r.find_all('div', recursive=False)
-                if len(cols) >= 2:
-                    no_t = cols[0].get_text(strip=True)
-                    data_t = "\n".join([c.get_text(strip=True) for c in cols[1:]])
-                    if "第" in no_t:
-                        valid_laws.append({"no": no_t, "content": data_t})
-
-        if not valid_laws:
-            return "搜尋完成，但網頁結構異常，請稍後再試。"
+            return "掃描完成，但網頁標籤定位失效，請檢查資料庫連結。"
 
         target = random.choice(valid_laws)
         
+        # 按照你要求的「明確指出第幾條」排版
         return f"📖 【刑法隨機抽考】\n\n📌 {target['no']}\n\n{target['content']}\n\n---\n資料來源：全國法規資料庫"
             
     except Exception as e:
@@ -85,10 +76,7 @@ def callback():
 def handle_message(event):
     if "刑法" in event.message.text:
         reply_text = get_random_law_from_web()
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=reply_text)
-        )
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
