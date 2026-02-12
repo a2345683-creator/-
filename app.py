@@ -4,30 +4,31 @@ import requests
 import re
 from datetime import datetime
 from bs4 import BeautifulSoup
-from flask import Flask, request, abort, render_template_string # 使用字串渲染最保險
+from flask import Flask, request, abort, render_template_string
 
 app = Flask(__name__)
 
 line_bot_api = LineBotApi(os.environ.get('CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.environ.get('CHANNEL_SECRET'))
 
-# --- 【關鍵修正】解決 500 錯誤的讀取方式 ---
+# --- 【解決 500 錯誤的核心修正】 ---
 @app.route('/')
 @app.route('/index.html')
 def index():
     try:
-        # 直接讀取同資料夾下的 index.html 內容
-        with open('index.html', 'r', encoding='utf-8') as f:
-            html_content = f.read()
-        return render_template_string(html_content)
+        # 使用絕對路徑讀取 index.html，避免 Render 環境找不到檔案
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        file_path = os.path.join(dir_path, 'index.html')
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return render_template_string(f.read())
     except Exception as e:
-        return f"網頁讀取失敗：{str(e)}。請確認 index.html 是否在 GitHub 根目錄。"
+        return f"網頁讀取失敗，原因：{str(e)}"
 
-# --- 工時計算邏輯 (跨午夜強韌版) ---
+# --- 工時計算邏輯 (支援跨午夜) ---
 def handle_work_calc(msg_text):
     try:
         data = [i.strip() for i in msg_text.split(',')]
-        if len(data) < 5: return "格式不完整"
+        if len(data) < 5: return "資料格式不完整。"
         shift_name = "日班 ☀️" if data[1] == 'D' else "夜班 🌙"
         
         def parse_time(t_str):
@@ -38,9 +39,9 @@ def handle_work_calc(msg_text):
 
         t1, t3 = parse_time(data[2]), parse_time(data[4])
         diff = (t3 - t1).total_seconds() / 3600
-        if diff < 0: diff += 24 
+        if diff < 0: diff += 24 # 處理夜班跨日計算
         
-        return f"📊 【工時報告】\n👤 員工：楊秦宇\n📅 班別：{shift_name}\n⏰ 累計時數：{diff:.2f} 小時"
+        return f"📊 【工時報告】\n👤 員工：楊秦宇\n📅 班別：{shift_name}\n⏰ 累計：{diff:.2f} 小時"
     except Exception as e:
         return f"⚠️ 計算出錯：{str(e)}"
 
@@ -48,21 +49,21 @@ def handle_work_calc(msg_text):
 def get_random_criminal_law():
     try:
         base_url = "https://law.moj.gov.tw"
-        all_law_url = f"{base_url}/LawClass/LawAll.aspx?pcode=C0000001"
-        res = requests.get(all_law_url, timeout=10)
+        url = f"{base_url}/LawClass/LawAll.aspx?pcode=C0000001"
+        res = requests.get(url, timeout=10)
         soup = BeautifulSoup(res.text, 'html.parser')
         links = soup.find_all('a', href=re.compile(r'LawSingle\.aspx\?pcode=C0000001'))
         target = random.choice(links)
         law_no = target.get_text(strip=True)
-        target_url = f"{base_url}/LawClass/{target['href'].replace('../', '')}"
+        t_url = f"{base_url}/LawClass/{target['href'].replace('../', '')}"
         
-        s_res = requests.get(target_url)
+        s_res = requests.get(t_url)
         s_soup = BeautifulSoup(s_res.text, 'html.parser')
-        content_tags = s_soup.select('.col-data, .line-0002')
-        lines = [t.get_text(strip=True) for t in content_tags if t.get_text(strip=True) != law_no]
+        content = s_soup.select('.col-data, .line-0002')
+        lines = [t.get_text(strip=True) for t in content if t.get_text(strip=True) != law_no]
         return f"📖 【刑法抽抽抽】\n📌 {law_no}\n\n" + "\n".join(lines)
     except:
-        return "連線繁忙，請再試一次！"
+        return "連線忙碌中，請稍後再試。"
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -78,8 +79,7 @@ def handle_message(event):
         reply = handle_work_calc(msg)
     elif "刑法" in msg:
         reply = get_random_criminal_law()
-    else:
-        return 
+    else: return
     line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
 
 if __name__ == "__main__":
