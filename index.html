@@ -3,59 +3,65 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>工時回報系統</title>
+    <title>工時計算系統</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; padding: 20px; display: flex; justify-content: center; }
+        body { font-family: -apple-system, sans-serif; background-color: #f0f2f5; padding: 15px; display: flex; justify-content: center; }
         .card { background: white; width: 100%; max-width: 400px; border-radius: 20px; padding: 25px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
-        h2 { text-align: center; color: #1a73e8; margin-bottom: 25px; }
-        
-        /* 日夜班切換按鈕 */
-        .shift-container { display: flex; gap: 15px; margin-bottom: 25px; }
-        .shift-option { flex: 1; border: 2px solid #e0e0e0; border-radius: 15px; padding: 15px; text-align: center; cursor: pointer; transition: 0.3s; }
-        .shift-option img { width: 50px; height: 50px; margin-bottom: 8px; }
-        .shift-option.active { border-color: #00b900; background-color: #f0fff0; box-shadow: 0 4px 12px rgba(0,185,0,0.2); }
-        .shift-label { font-weight: bold; font-size: 16px; color: #333; }
-
-        /* 時間選取器 (滾輪樣式) */
-        .input-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: 500; color: #5f6368; }
-        input[type="time"] { width: 100%; padding: 15px; border: 1px solid #dadce0; border-radius: 10px; font-size: 18px; color: #202124; appearance: none; -webkit-appearance: none; }
-
-        /* 送出按鈕 */
-        .submit-btn { width: 100%; background-color: #00b900; color: white; border: none; padding: 18px; border-radius: 12px; font-size: 18px; font-weight: bold; margin-top: 10px; cursor: pointer; transition: 0.3s; }
-        .submit-btn:active { background-color: #008f00; transform: scale(0.98); }
+        h2 { text-align: center; color: #1a73e8; margin-bottom: 25px; font-size: 24px; }
+        .shift-container { display: flex; gap: 12px; margin-bottom: 25px; }
+        .shift-option { flex: 1; border: 2px solid #e0e0e0; border-radius: 15px; padding: 12px; text-align: center; cursor: pointer; transition: 0.3s; }
+        .shift-option.active { border-color: #00b900; background-color: #f0fff0; box-shadow: 0 4px 12px rgba(0,185,0,0.15); }
+        .shift-option img { width: 45px; height: 45px; margin-bottom: 8px; }
+        .input-group { margin-bottom: 18px; }
+        label { display: block; margin-bottom: 6px; font-size: 15px; color: #5f6368; font-weight: bold; }
+        .time-row { display: flex; gap: 10px; align-items: center; }
+        input[type="time"] { flex: 1; padding: 12px; border: 1px solid #dadce0; border-radius: 10px; font-size: 18px; }
+        .submit-btn { width: 100%; background-color: #00b900; color: white; border: none; padding: 18px; border-radius: 15px; font-size: 20px; font-weight: bold; cursor: pointer; margin-top: 15px; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2>🕒 工時快速回報</h2>
+        <h2>🕒 工時計算系統</h2>
         
         <div class="shift-container">
             <div id="dayBtn" class="shift-option active" onclick="selectShift('D')">
-                <img src="https://cdn-icons-png.flaticon.com/512/439/439842.png" alt="日班">
-                <div class="shift-label">日班 ☀️</div>
+                <img src="https://cdn-icons-png.flaticon.com/512/439/439842.png"><div class="shift-label">日班 ☀️</div>
             </div>
             <div id="nightBtn" class="shift-option" onclick="selectShift('N')">
-                <img src="https://cdn-icons-png.flaticon.com/512/606/606807.png" alt="夜班">
-                <div class="shift-label">夜班 🌙</div>
+                <img src="https://cdn-icons-png.flaticon.com/512/606/606807.png"><div class="shift-label">夜班 🌙</div>
             </div>
         </div>
 
         <div class="input-group">
-            <label>上班時間 (滾輪選取)</label>
+            <label>1. 上班時間</label>
             <input type="time" id="startTime" value="07:20">
         </div>
+
         <div class="input-group">
-            <label>休息結束 (滾輪選取)</label>
-            <input type="time" id="restTime" value="13:20">
+            <label>2. 第一次休息 (起 ➔ 止)</label>
+            <div class="time-row">
+                <input type="time" id="b1s" value="11:30">
+                <span>➔</span>
+                <input type="time" id="b1e" value="12:30">
+            </div>
         </div>
+
         <div class="input-group">
-            <label>下班時間 (滾輪選取)</label>
+            <label>3. 第二次休息 (起 ➔ 止)</label>
+            <div class="time-row">
+                <input type="time" id="b2s" value="16:30">
+                <span>➔</span>
+                <input type="time" id="b2e" value="17:00">
+            </div>
+        </div>
+
+        <div class="input-group">
+            <label>4. 下班時間</label>
             <input type="time" id="endTime" value="19:20">
         </div>
 
-        <button class="submit-btn" onclick="submitWorkData()">確認送出</button>
+        <button class="submit-btn" onclick="submitWorkData()">計算淨工時</button>
     </div>
 
     <script>
@@ -65,39 +71,36 @@
             currentShift = shift;
             document.getElementById('dayBtn').classList.toggle('active', shift === 'D');
             document.getElementById('nightBtn').classList.toggle('active', shift === 'N');
+            
+            if (shift === 'D') {
+                document.getElementById('startTime').value = "07:20";
+                document.getElementById('b1s').value = "11:30";
+                document.getElementById('b1e').value = "12:30";
+                document.getElementById('b2s').value = "16:30";
+                document.getElementById('b2e').value = "17:00";
+                document.getElementById('endTime').value = "19:20";
+            } else {
+                document.getElementById('startTime').value = "19:20";
+                document.getElementById('b1s').value = "23:30";
+                document.getElementById('b1e').value = "00:30";
+                document.getElementById('b2s').value = "04:30";
+                document.getElementById('b2e').value = "05:00";
+                document.getElementById('endTime').value = "07:20";
+            }
         }
 
-        // 初始化 LIFF
         async function initializeLiff() {
             try {
-                // 請在此處填入你在 LINE Developers 申請的 LIFF ID
                 await liff.init({ liffId: "2009119145-3CSat8WJ" });
-                if (!liff.isLoggedIn()) {
-                    liff.login();
-                }
-            } catch (error) {
-                console.error('LIFF 初始化失敗', error);
-            }
+                if (!liff.isLoggedIn()) { liff.login(); }
+            } catch (error) { console.error('LIFF 初始化失敗', error); }
         }
         initializeLiff();
 
-        // 送出數據
         function submitWorkData() {
-            const t1 = document.getElementById('startTime').value;
-            const t2 = document.getElementById('restTime').value;
-            const t3 = document.getElementById('endTime').value;
-            
-            // 組合字串：機器人會辨識 "工時" 開頭的訊息
-            const message = `工時,${currentShift},${t1},${t2},${t3}`;
-            
-            liff.sendMessages([{
-                type: 'text',
-                text: message
-            }]).then(() => {
-                liff.closeWindow(); // 傳送完畢自動關閉視窗
-            }).catch((err) => {
-                console.error('訊息傳送失敗', err);
-            });
+            // 傳送字串順序：工時,班別,上班,下班,休1起,休1止,休2起,休2止
+            const msg = `工時,${currentShift},${document.getElementById('startTime').value},${document.getElementById('endTime').value},${document.getElementById('b1s').value},${document.getElementById('b1e').value},${document.getElementById('b2s').value},${document.getElementById('b2e').value}`;
+            liff.sendMessages([{ type: 'text', text: msg }]).then(() => liff.closeWindow());
         }
     </script>
 </body>
