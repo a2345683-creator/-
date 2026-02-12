@@ -21,44 +21,47 @@ handler = WebhookHandler(os.environ.get('CHANNEL_SECRET'))
 
 def get_random_criminal_law():
     try:
+        # 刑法全文網址
         url = "https://law.moj.gov.tw/LawClass/LawAll.aspx?pcode=C0000001"
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         
         response = requests.get(url, headers=headers)
         if response.status_code != 200:
-            return "連線失敗，政府網站可能在維修。"
+            return "連線失敗，請稍後再試。"
 
         soup = BeautifulSoup(response.text, 'html.parser')
+        # 抓取所有潛在的法條區塊
+        blocks = soup.find_all('div', class_='law-article')
         
-        # 建立黃金名單
         valid_laws = []
-        
-        # 策略 A：尋找標準法規格式 (law-article)
-        articles = soup.find_all('div', class_='law-article')
-        
-        # 如果策略 A 沒抓到，嘗試策略 B：尋找表格行格式 (row)
-        if not articles:
-            articles = soup.find_all('div', class_='row')
-
-        for block in articles:
-            # 嘗試抓取條號 (可能叫 line-0000 或 col-no)
-            no_div = block.find('div', class_='line-0000') or block.find('div', class_='col-no')
-            # 嘗試抓取內容 (可能叫 line-0002 或 col-data)
-            content_div = block.find('div', class_='line-0002') or block.find('div', class_='col-data')
+        for b in blocks:
+            # 獲取該區塊內所有的子 div
+            divs = b.find_all('div', recursive=False)
             
-            if no_div and content_div:
-                no_text = no_div.get_text(strip=True)
-                content_text = content_div.get_text(strip=True)
+            # 通常第一個子 div 是條號，第二個之後是內容
+            if len(divs) >= 2:
+                no_text = divs[0].get_text(strip=True)
+                # 合併後面所有內容 div 的文字
+                content_text = "".join([d.get_text(strip=True) for d in divs[1:]])
                 
-                # 過濾掉廢止或空條文
+                # 只要條號包含「第」且內容長度足夠，就視為有效法條
                 if "第" in no_text and len(content_text) > 5:
                     valid_laws.append({"no": no_text, "content": content_text})
 
         if not valid_laws:
-            # 增加除錯資訊
-            return f"掃描完成，發現 {len(articles)} 個區塊，但內容過濾後為 0。請再試一次！"
+            # 如果還是失敗，嘗試更寬鬆的策略：抓取所有 row 格式
+            rows = soup.find_all('div', class_='row')
+            for r in rows:
+                col_no = r.find('div', class_='col-no')
+                col_data = r.find('div', class_='col-data')
+                if col_no and col_data:
+                    no_t = col_no.get_text(strip=True)
+                    data_t = col_data.get_text(strip=True)
+                    if "第" in no_t and len(data_t) > 5:
+                        valid_laws.append({"no": no_t, "content": data_t})
+
+        if not valid_laws:
+            return f"掃描完成，抓到 {len(blocks)} 個原始區塊，但解析失敗。請檢查網頁是否改版。"
 
         target = random.choice(valid_laws)
         return f"【刑法隨機抽考】\n\n{target['no']}\n{target['content']}\n\n(資料來源：全國法規資料庫)"
