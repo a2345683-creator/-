@@ -16,11 +16,9 @@ from linebot.models import (
 
 app = Flask(__name__)
 
-# --- 設定金鑰 ---
 line_bot_api = LineBotApi(os.environ.get('CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.environ.get('CHANNEL_SECRET'))
 
-# --- 終極優化版：先篩選後隨機 ---
 def get_random_criminal_law():
     try:
         url = "https://law.moj.gov.tw/LawClass/LawAll.aspx?pcode=C0000001"
@@ -30,43 +28,44 @@ def get_random_criminal_law():
         
         response = requests.get(url, headers=headers)
         if response.status_code != 200:
-            return "連線失敗，法務部網站暫時無法存取。"
+            return "連線失敗，政府網站可能在維修。"
 
         soup = BeautifulSoup(response.text, 'html.parser')
-        # 抓取所有法條區塊
-        all_blocks = soup.find_all('div', class_='law-article')
         
-        # 建立「黃金名單」：只存放真正有效的法條
+        # 建立黃金名單
         valid_laws = []
         
-        for block in all_blocks:
-            law_no_div = block.find('div', class_='line-0000') # 條號
-            law_content_div = block.find('div', class_='line-0002') # 內容
-            
-            # 只有當「條號」和「內容」都存在，且內容不是空的時候才加入
-            if law_no_div and law_content_div:
-                no_text = law_no_div.text.strip()
-                content_text = law_content_div.text.strip()
-                
-                # 排除掉章節標題（通常很短）或空法條
-                if no_text and content_text and "第" in no_text:
-                    valid_laws.append({
-                        "no": no_text,
-                        "content": content_text
-                    })
+        # 策略 A：尋找標準法規格式 (law-article)
+        articles = soup.find_all('div', class_='law-article')
         
-        if not valid_laws:
-            return "搜尋完畢，但沒找到有效的法條內容。"
+        # 如果策略 A 沒抓到，嘗試策略 B：尋找表格行格式 (row)
+        if not articles:
+            articles = soup.find_all('div', class_='row')
 
-        # 從黃金名單隨機抽一條
+        for block in articles:
+            # 嘗試抓取條號 (可能叫 line-0000 或 col-no)
+            no_div = block.find('div', class_='line-0000') or block.find('div', class_='col-no')
+            # 嘗試抓取內容 (可能叫 line-0002 或 col-data)
+            content_div = block.find('div', class_='line-0002') or block.find('div', class_='col-data')
+            
+            if no_div and content_div:
+                no_text = no_div.get_text(strip=True)
+                content_text = content_div.get_text(strip=True)
+                
+                # 過濾掉廢止或空條文
+                if "第" in no_text and len(content_text) > 5:
+                    valid_laws.append({"no": no_text, "content": content_text})
+
+        if not valid_laws:
+            # 增加除錯資訊
+            return f"掃描完成，發現 {len(articles)} 個區塊，但內容過濾後為 0。請再試一次！"
+
         target = random.choice(valid_laws)
-        
         return f"【刑法隨機抽考】\n\n{target['no']}\n{target['content']}\n\n(資料來源：全國法規資料庫)"
             
     except Exception as e:
-        return f"程式執行發生錯誤：{str(e)}"
+        return f"程式執行錯誤：{str(e)}"
 
-# --- LINE Webhook 接口 ---
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
@@ -77,12 +76,10 @@ def callback():
         abort(400)
     return 'OK'
 
-# --- 訊息處理 ---
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     msg = event.message.text
     if "刑法" in msg:
-        # 直接呼叫優化後的函式
         reply_text = get_random_criminal_law()
         line_bot_api.reply_message(
             event.reply_token,
