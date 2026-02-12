@@ -16,14 +16,13 @@ from linebot.models import (
 
 app = Flask(__name__)
 
-# --- 設定金鑰 (從環境變數讀取) ---
+# --- 設定金鑰 ---
 line_bot_api = LineBotApi(os.environ.get('CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.environ.get('CHANNEL_SECRET'))
 
-# --- 爬蟲核心功能：抓取刑法 ---
+# --- 爬蟲核心功能：防呆加強版 ---
 def get_random_criminal_law():
     try:
-        # pcode=C0000001 是「中華民國刑法」的專屬代碼
         url = "https://law.moj.gov.tw/LawClass/LawAll.aspx?pcode=C0000001"
         
         headers = {
@@ -34,30 +33,34 @@ def get_random_criminal_law():
         
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # 找到網頁上所有的法條區塊
             articles = soup.find_all('div', class_='law-article')
             
             if not articles:
-                return "抓取失敗：找不到法條，可能是法務部網站改版了。"
+                return "抓取失敗：找不到法條。"
             
-            # 隨機挑選一條
-            random_article = random.choice(articles)
+            # --- 修正重點開始：嘗試最多 10 次 ---
+            for _ in range(10):
+                random_article = random.choice(articles)
+                
+                # 先檢查這些格子存不存在 (防呆)
+                law_no_div = random_article.find('div', class_='line-0000')
+                law_content_div = random_article.find('div', class_='line-0002')
+                
+                # 只有當「條號」和「內容」都有抓到時，才回傳
+                if law_no_div and law_content_div:
+                    law_no = law_no_div.text.strip()
+                    law_content = law_content_div.text.strip()
+                    return f"【刑法隨機抽考】\n\n{law_no}\n{law_content}\n\n(資料來源：全國法規資料庫)"
+            # --- 修正重點結束 ---
             
-            # 抓取條號與內容
-            law_no = random_article.find('div', class_='line-0000').text.strip()
-            law_content = random_article.find('div', class_='line-0002').text.strip()
-            
-            # 組合回傳文字
-            result = f"【刑法隨機抽考】\n\n{law_no}\n{law_content}\n\n(資料來源：全國法規資料庫)"
-            return result
+            return "運氣不好，連續抽到格式不符的法條，請再試一次！"
         else:
             return "連線失敗，法務部網站可能暫時無法存取。"
             
     except Exception as e:
         return f"發生錯誤：{str(e)}"
 
-# --- LINE Webhook 監聽接口 ---
+# --- LINE Webhook ---
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
@@ -74,7 +77,6 @@ def callback():
 def handle_message(event):
     msg = event.message.text
     
-    # 當使用者輸入包含「刑法」關鍵字時，才去抓法條
     if "刑法" in msg:
         reply_text = get_random_criminal_law()
         line_bot_api.reply_message(
