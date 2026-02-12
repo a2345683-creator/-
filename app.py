@@ -16,22 +16,17 @@ from linebot.models import (
 
 app = Flask(__name__)
 
-# 設定金鑰 (從 Render 的環境變數讀取)
 line_bot_api = LineBotApi(os.environ.get('CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.environ.get('CHANNEL_SECRET'))
 
-# --- 核心爬蟲功能：自動前往全國法規資料庫抓取 ---
 def get_random_law_from_web():
     try:
-        # 刑法全文網址
         url = "https://law.moj.gov.tw/LawClass/LawAll.aspx?pcode=C0000001"
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         
         response = requests.get(url, headers=headers)
         if response.status_code != 200:
-            return "連線失敗，請檢查政府網站是否正常。"
+            return "連線失敗，請檢查網路。"
 
         soup = BeautifulSoup(response.text, 'html.parser')
         # 抓取所有法條區塊
@@ -39,46 +34,43 @@ def get_random_law_from_web():
         
         valid_laws = []
         for b in blocks:
-            # 精準鎖定：line-0000 是條號，line-0002 是內容
-            no_div = b.find('div', class_='line-0000')
-            content_divs = b.find_all('div', class_='line-0002')
+            # --- 暴力解碼：抓取區塊內所有的 div 子層 ---
+            divs = b.find_all('div', recursive=False)
             
-            if no_div and content_divs:
-                no_text = no_div.get_text(strip=True)
+            # 只要有兩個以上的格子，就一定有條號跟內容
+            if len(divs) >= 2:
+                # 第一個格子就是條號 (例如：第 38-3 條)
+                no_text = divs[0].get_text(strip=True)
                 
-                # 保留換行結構，將每一項分開
-                content_list = []
-                for d in content_divs:
-                    t = d.get_text(strip=True)
-                    if t:
-                        content_list.append(t)
-                
+                # 後面所有的格子通通接起來當內容，並強制換行
+                content_list = [d.get_text(strip=True) for d in divs[1:] if d.get_text(strip=True)]
                 full_content = "\n".join(content_list)
                 
-                # 過濾掉章節標題
-                if "第" in no_text and len(full_content) > 2:
+                # 只要條號有「第」這個字，就存進清單
+                if "第" in no_text and len(full_content) > 5:
                     valid_laws.append({"no": no_text, "content": full_content})
 
         if not valid_laws:
-            return "掃描完成，但格式解析不完全，請再試一次。"
+            # 如果還是失敗，嘗試抓取表格 row 模式
+            rows = soup.find_all('div', class_='row')
+            for r in rows:
+                cols = r.find_all('div', recursive=False)
+                if len(cols) >= 2:
+                    no_t = cols[0].get_text(strip=True)
+                    data_t = "\n".join([c.get_text(strip=True) for c in cols[1:]])
+                    if "第" in no_t:
+                        valid_laws.append({"no": no_t, "content": data_t})
 
-        # 隨機抽一條
+        if not valid_laws:
+            return "搜尋完成，但網頁結構異常，請稍後再試。"
+
         target = random.choice(valid_laws)
         
-        # 按照你要求的格式呈現：明確指出第幾條，後面裁示內容
-        result = [
-            "📖 【刑法抽抽抽】",
-            f"\n📌 {target['no']}",
-            f"\n{target['content']}",
-            "\n---",
-            "資料來源：全國法規資料庫"
-        ]
-        return "\n".join(result)
+        return f"📖 【刑法隨機抽考】\n\n📌 {target['no']}\n\n{target['content']}\n\n---\n資料來源：全國法規資料庫"
             
     except Exception as e:
-        return f"執行錯誤：{str(e)}"
+        return f"程式錯誤：{str(e)}"
 
-# --- LINE Webhook 接口 ---
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
@@ -89,11 +81,9 @@ def callback():
         abort(400)
     return 'OK'
 
-# --- 訊息處理 ---
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    msg = event.message.text
-    if "刑法" in msg:
+    if "刑法" in event.message.text:
         reply_text = get_random_law_from_web()
         line_bot_api.reply_message(
             event.reply_token,
