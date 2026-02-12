@@ -21,7 +21,6 @@ handler = WebhookHandler(os.environ.get('CHANNEL_SECRET'))
 
 def get_random_criminal_law():
     try:
-        # 刑法全文網址
         url = "https://law.moj.gov.tw/LawClass/LawAll.aspx?pcode=C0000001"
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         
@@ -30,41 +29,47 @@ def get_random_criminal_law():
             return "連線失敗，請稍後再試。"
 
         soup = BeautifulSoup(response.text, 'html.parser')
-        # 抓取所有潛在的法條區塊
         blocks = soup.find_all('div', class_='law-article')
         
         valid_laws = []
         for b in blocks:
-            # 獲取該區塊內所有的子 div
             divs = b.find_all('div', recursive=False)
-            
-            # 通常第一個子 div 是條號，第二個之後是內容
             if len(divs) >= 2:
+                # 1. 抓取條號 (如：第 79-1 條)
                 no_text = divs[0].get_text(strip=True)
-                # 合併後面所有內容 div 的文字
-                content_text = "".join([d.get_text(strip=True) for d in divs[1:]])
                 
-                # 只要條號包含「第」且內容長度足夠，就視為有效法條
-                if "第" in no_text and len(content_text) > 5:
-                    valid_laws.append({"no": no_text, "content": content_text})
+                # 2. 抓取內容並排版
+                content_parts = []
+                for d in divs[1:]:
+                    text = d.get_text(strip=True)
+                    if text:
+                        # 如果是純數字（項次），排版時稍微縮排
+                        if text.isdigit():
+                            content_parts.append(f"\n({text})")
+                        else:
+                            content_parts.append(text)
+                
+                # 將內容組合成一段一段的文字
+                full_content = " ".join(content_parts).replace("\n ", "\n").strip()
+                
+                if "第" in no_text and len(full_content) > 5:
+                    valid_laws.append({"no": no_text, "content": full_content})
 
         if not valid_laws:
-            # 如果還是失敗，嘗試更寬鬆的策略：抓取所有 row 格式
-            rows = soup.find_all('div', class_='row')
-            for r in rows:
-                col_no = r.find('div', class_='col-no')
-                col_data = r.find('div', class_='col-data')
-                if col_no and col_data:
-                    no_t = col_no.get_text(strip=True)
-                    data_t = col_data.get_text(strip=True)
-                    if "第" in no_t and len(data_t) > 5:
-                        valid_laws.append({"no": no_t, "content": data_t})
-
-        if not valid_laws:
-            return f"掃描完成，抓到 {len(blocks)} 個原始區塊，但解析失敗。請檢查網頁是否改版。"
+            return "目前無法解析法條，請再試一次。"
 
         target = random.choice(valid_laws)
-        return f"【刑法隨機抽考】\n\n{target['no']}\n{target['content']}\n\n(資料來源：全國法規資料庫)"
+        
+        # --- 最終視覺排版：明確區分條號與內容 ---
+        result = [
+            "📖 【刑法抽抽抽】",
+            f"\n📌 {target['no']}",  # 明確指出第幾條
+            "\n" + target['content'], # 後面裁示內容
+            "\n---",
+            "資料來源：全國法規資料庫"
+        ]
+        
+        return "\n".join(result)
             
     except Exception as e:
         return f"程式執行錯誤：{str(e)}"
