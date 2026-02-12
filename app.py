@@ -57,7 +57,7 @@ def get_random_law_from_web():
         target = random.choice(valid_laws)
         
         # 按照你要求的「明確指出第幾條」排版
-        return f"📖 【刑法隨機抽考】\n\n📌 {target['no']}\n\n{target['content']}\n\n---\n資料來源：全國法規資料庫"
+        return f"📖 【刑法抽抽抽】\n\n📌 {target['no']}\n\n{target['content']}\n\n---\n資料來源：全國法規資料庫"
             
     except Exception as e:
         return f"程式錯誤：{str(e)}"
