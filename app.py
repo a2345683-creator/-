@@ -22,45 +22,54 @@ def get_random_law_from_web():
             return "連線失敗，請稍後再試。"
 
         soup = BeautifulSoup(response.text, 'html.parser')
-        # 抓取所有法條主區塊
-        blocks = soup.select('div.law-article')
+        # 抓取所有法條區塊
+        blocks = soup.find_all('div', class_='law-article')
         
-        valid_laws = []
+        law_database = [] # 這就是我們的「即時對照表」
+
         for b in blocks:
-            # --- 核心修正：精準抓取條號與內容標籤 ---
-            # line-0000 是條號，line-0002 是法條內文
-            no_tag = b.select_one('.line-0000')
-            content_tags = b.select('.line-0002')
+            # 1. 嘗試用標籤名抓取
+            no_tag = b.find('div', class_='line-0000')
+            content_tags = b.find_all('div', class_='line-0002')
             
-            if no_tag and content_tags:
+            # 2. 【反查機制】如果標籤抓不到，改用「位置」抓取 (抓區塊內第一個 div)
+            if not no_tag:
+                all_divs = b.find_all('div', recursive=False)
+                if len(all_divs) >= 2:
+                    no_text = all_divs[0].get_text(strip=True)
+                    content_list = [d.get_text(strip=True) for d in all_divs[1:]]
+                else:
+                    continue
+            else:
                 no_text = no_tag.get_text(strip=True)
-                
-                # 處理每一項內容，確保 1, 2, 3 會換行
-                content_lines = []
-                for ct in content_tags:
-                    text = ct.get_text(strip=True)
-                    if text:
-                        # 如果是純數字項次，稍微美化它
-                        if text.isdigit():
-                            content_lines.append(f"\n({text})")
-                        else:
-                            content_lines.append(text)
-                
-                full_content = "\n".join(content_lines).replace("\n\n", "\n").strip()
-                
-                if "第" in no_text and len(full_content) > 5:
-                    valid_laws.append({"no": no_text, "content": full_content})
+                content_list = [d.get_text(strip=True) for d in content_tags]
 
-        if not valid_laws:
-            return "掃描完成，但網頁標籤定位失效，請檢查資料庫連結。"
+            # 整理內容排版 (處理項次 1, 2, 3)
+            formatted_content = []
+            for t in content_list:
+                if t:
+                    # 如果內容是單純數字，代表是項次，幫它換行
+                    if t.isdigit():
+                        formatted_content.append(f"\n({t})")
+                    else:
+                        formatted_content.append(t)
+            
+            full_text = " ".join(formatted_content).replace("\n ", "\n").strip()
+            
+            # 只要有條號且內容夠長，就存入對照表
+            if "第" in no_text and len(full_text) > 5:
+                law_database.append({"no": no_text, "content": full_text})
 
-        target = random.choice(valid_laws)
+        if not law_database:
+            return "資料解析失敗，請檢查網路連線。"
+
+        # 從對照表隨機抽題
+        target = random.choice(law_database)
         
-        # 按照你要求的「明確指出第幾條」排版
-        return f"📖 【刑法抽抽抽】\n\n📌 {target['no']}\n\n{target['content']}\n\n---\n資料來源：全國法規資料庫"
+        return f"📖 【刑法抽抽抽】\n\n📌 {target['no']}\n\n{target['content']}\n\n---\n資料來源：全國法規資料庫 (已啟動反查機制)"
             
     except Exception as e:
-        return f"程式錯誤：{str(e)}"
+        return f"程式執行錯誤：{str(e)}"
 
 @app.route("/callback", methods=['POST'])
 def callback():
