@@ -13,45 +13,35 @@ app = Flask(__name__)
 line_bot_api = LineBotApi(os.environ.get('CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.environ.get('CHANNEL_SECRET'))
 
-def get_random_law_hyper_robust():
+def get_random_law_single_fix():
     try:
         base_url = "https://law.moj.gov.tw"
-        # 刑法全文頁面
         all_law_url = f"{base_url}/LawClass/LawAll.aspx?pcode=C0000001"
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'}
         
-        # 1. 抓取全文頁面，獲取所有 LawSingle 連結
+        # 1. 在總表抓取所有條號連結 (這部分你已經成功了！)
         response = requests.get(all_law_url, headers=headers, timeout=15)
         soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # --- 核心修正：直接掃描所有包含 LawSingle 且屬於刑法代碼的連結 ---
-        # 這樣就算滑鼠沒移上去，程式也能直接從代碼層級把連結挖出來
         law_links = soup.find_all('a', href=re.compile(r'LawSingle\.aspx\?pcode=C0000001'))
         
-        if not law_links:
-            # 備援方案：如果 a 標籤抓不到，嘗試從 class 抓取
-            law_links = soup.select('div.line-0000 a')
-
-        if not law_links:
-            return "偵測不到條號連結，可能是政府網站暫時阻擋，請稍後再試一次！"
-
-        # 隨機挑一個連結
         target = random.choice(law_links)
-        target_url = base_url + "/LawClass/" + target['href'].replace("../", "")
-        law_no = target.get_text(strip=True) or "隨機條文"
+        law_no = target.get_text(strip=True)
+        target_path = target['href'].replace("../", "")
+        target_url = f"{base_url}/LawClass/{target_path}"
         
-        # 2. 進入單一法條頁面抓取正式內容
+        # 2. 進入單一頁面 (LawSingle) 抓取內容
         single_res = requests.get(target_url, headers=headers, timeout=15)
         single_soup = BeautifulSoup(single_res.text, 'html.parser')
         
-        # 抓取單一頁面的內容 (line-0002)
-        content_tags = single_soup.select('div.line-0002')
+        # --- 根據 image_5f41f5.png 的精準修正 ---
+        # 單一頁面的內容標籤通常叫做 .col-data
+        content_tags = single_soup.select('.col-data, .line-0002, .law-reg-content-row')
         
         lines = []
         for ct in content_tags:
             t = ct.get_text(strip=True)
-            if t:
-                # 處理項次排版
+            if t and t != law_no:
+                # 處理項次換行
                 if t.isdigit():
                     lines.append(f"\n({t})")
                 else:
@@ -59,10 +49,15 @@ def get_random_law_hyper_robust():
         
         full_content = " ".join(lines).replace("\n ", "\n").strip()
         
-        return f"📖 【刑法抽抽抽】\n\n📌 {law_no}\n\n{full_content}\n\n---\n資料來源：全國法規資料庫)"
+        # 如果還是空，嘗試抓取所有在表格內的文字
+        if not full_content:
+            all_text_divs = single_soup.select('td, .LawContent')
+            full_content = "\n".join([d.get_text(strip=True) for d in all_text_divs if len(d.get_text(strip=True)) > 10])
+
+        return f"📖 【刑法抽抽抽】\n\n📌 {law_no}\n\n{full_content}\n\n---\n資料來源：全國法規資料庫"
             
     except Exception as e:
-        return f"連線不穩定，請再按一次圖片按鈕！\n(錯誤訊息: {str(e)[:20]})"
+        return f"解析失敗，請再抽一次！\n(錯誤: {str(e)[:15]})"
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -77,7 +72,7 @@ def callback():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     if "刑法" in event.message.text:
-        reply_text = get_random_law_hyper_robust()
+        reply_text = get_random_law_single_fix()
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
 
 if __name__ == "__main__":
