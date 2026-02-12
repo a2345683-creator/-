@@ -4,25 +4,26 @@ import requests
 import re
 from datetime import datetime
 from bs4 import BeautifulSoup
-from flask import Flask, request, abort, send_file # 新增 send_file
-from linebot import LineBotApi, WebhookHandler
-from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
+from flask import Flask, request, abort, render_template_string # 使用字串渲染最保險
 
-# 初始化 Flask
 app = Flask(__name__)
 
 line_bot_api = LineBotApi(os.environ.get('CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.environ.get('CHANNEL_SECRET'))
 
-# --- 新增：讓伺服器認得你的 index.html ---
+# --- 【關鍵修正】解決 500 錯誤的讀取方式 ---
 @app.route('/')
-@app.route('/index.html') # 增加這行，支援兩種進站方式
+@app.route('/index.html')
 def index():
-    # 確保伺服器能從目前資料夾找到 index.html
-    return send_from_directory('.', 'index.html')
+    try:
+        # 直接讀取同資料夾下的 index.html 內容
+        with open('index.html', 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        return render_template_string(html_content)
+    except Exception as e:
+        return f"網頁讀取失敗：{str(e)}。請確認 index.html 是否在 GitHub 根目錄。"
 
-# --- 工時計算邏輯 (維持強韌版) ---
+# --- 工時計算邏輯 (跨午夜強韌版) ---
 def handle_work_calc(msg_text):
     try:
         data = [i.strip() for i in msg_text.split(',')]
@@ -37,9 +38,9 @@ def handle_work_calc(msg_text):
 
         t1, t3 = parse_time(data[2]), parse_time(data[4])
         diff = (t3 - t1).total_seconds() / 3600
-        if diff < 0: diff += 24
+        if diff < 0: diff += 24 
         
-        return f"📊 【工時報告】\n👤 員工：楊秦宇\n📅 班別：{shift_name}\n⏰ 時數：{diff:.2f} 小時"
+        return f"📊 【工時報告】\n👤 員工：楊秦宇\n📅 班別：{shift_name}\n⏰ 累計時數：{diff:.2f} 小時"
     except Exception as e:
         return f"⚠️ 計算出錯：{str(e)}"
 
