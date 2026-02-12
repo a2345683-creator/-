@@ -19,10 +19,8 @@ app = Flask(__name__)
 line_bot_api = LineBotApi(os.environ.get('CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.environ.get('CHANNEL_SECRET'))
 
-# --- 核心功能：抓取法條並超清爽排版 ---
 def get_random_criminal_law():
     try:
-        # 刑法網址
         url = "https://law.moj.gov.tw/LawClass/LawAll.aspx?pcode=C0000001"
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         
@@ -36,44 +34,44 @@ def get_random_criminal_law():
         
         valid_laws = []
         for b in blocks:
-            # 找出區塊內所有的小格子 (div)
-            divs = b.find_all('div', recursive=False)
+            # 抓取該區塊內所有的 div
+            # 全國法規資料庫結構：第一個 div 是條號，後面的是每一項內容
+            all_divs = b.find_all('div', recursive=False)
             
-            # 至少要有條號跟內容兩個格子才算有效
-            if len(divs) >= 2:
-                # --- 1. 抓取條號 ---
-                # 通常第一個格子就是條號 (例如: 第 38-3 條)
-                no_text = divs[0].get_text(strip=True)
+            if len(all_divs) >= 2:
+                # 1. 抓取條號 (確保像 38-3 這種格式不漏掉)
+                no_text = all_divs[0].get_text(strip=True)
                 
-                # --- 2. 抓取內容 (修正重點) ---
-                # 我們不再去猜測內容是不是數字，而是把剩下所有的格子
-                # 一個一個抓出來，並且用「換行符號」連接起來。
-                content_lines = []
-                for d in divs[1:]: # 從第二個格子開始抓
-                    text = d.get_text(strip=True)
-                    if text: # 只要有文字就保留
-                        content_lines.append(text)
+                # 2. 抓取內容 (包含 1, 2, 3 等項次)
+                content_parts = []
+                for i in range(1, len(all_divs)):
+                    text = all_divs[i].get_text(strip=True)
+                    if text:
+                        # 如果這一個 div 只有純數字，它就是「項次標號」
+                        if text.isdigit():
+                            content_parts.append(f"\n({text})") # 給項次加個括號並換行
+                        else:
+                            content_parts.append(text)
                 
-                # 用換行符號 (\n) 把所有內容接起來，確保 1, 2, 3 會獨自一行
-                full_content = "\n".join(content_lines)
+                # 組合成乾淨的內容字串
+                full_content = " ".join(content_parts).replace("\n ", "\n").strip()
                 
-                # 過濾掉不是法條的東西 (例如章節標題)
-                if "第" in no_text and len(full_content) > 2:
+                # 只要條號有「第」且內容長度夠，就加入清單
+                if "第" in no_text and len(full_content) > 5:
                     valid_laws.append({"no": no_text, "content": full_content})
 
         if not valid_laws:
-            return "目前無法解析法條，請再試一次。"
+            return "目前無法解析法條，請確認網頁結構。"
 
-        # 隨機抽一條
         target = random.choice(valid_laws)
         
-        # --- 最終排版組合 ---
+        # --- 最終視覺排版：模擬你要求的明確格式 ---
         result = [
-            "📖 【刑法抽抽抽】",
-            f"\n📌 {target['no']}",  # 條號獨立顯示在最上方，加個圖釘標示
-            "\n" + target['content'], # 內容在下方，每一項都會自動換行
+            "📖 【刑法隨機抽考】",
+            f"\n📌 {target['no']}",      # 明確標出：第 38-3 條
+            "\n" + target['content'],   # 後面裁示內容 (1, 2, 3 換行顯示)
             "\n---",
-            "(資料來源：全國法規資料庫)"
+            "資料來源：全國法規資料庫"
         ]
         
         return "\n".join(result)
@@ -81,7 +79,6 @@ def get_random_criminal_law():
     except Exception as e:
         return f"程式執行錯誤：{str(e)}"
 
-# --- LINE Webhook 設定 (維持不變) ---
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
@@ -92,11 +89,10 @@ def callback():
         abort(400)
     return 'OK'
 
-# --- 訊息處理 (維持不變) ---
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     msg = event.message.text
-    if "刑法" in msg: # 只要訊息有「刑法」兩個字就觸發
+    if "刑法" in msg:
         reply_text = get_random_criminal_law()
         line_bot_api.reply_message(
             event.reply_token,
