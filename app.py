@@ -5,26 +5,30 @@ import re
 from datetime import datetime
 from bs4 import BeautifulSoup
 from flask import Flask, request, abort, render_template_string
+# --- 【關鍵修正：補上這一行】 ---
+from linebot import LineBotApi, WebhookHandler 
+from linebot.exceptions import InvalidSignatureError
+from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
 app = Flask(__name__)
 
+# 設定 LINE 密鑰
 line_bot_api = LineBotApi(os.environ.get('CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.environ.get('CHANNEL_SECRET'))
 
-# --- 【解決 500 錯誤的核心修正】 ---
+# --- 1. 網頁讀取功能 (提供 LIFF 選單介面) ---
 @app.route('/')
 @app.route('/index.html')
 def index():
     try:
-        # 使用絕對路徑讀取 index.html，避免 Render 環境找不到檔案
         dir_path = os.path.dirname(os.path.realpath(__file__))
         file_path = os.path.join(dir_path, 'index.html')
         with open(file_path, 'r', encoding='utf-8') as f:
             return render_template_string(f.read())
     except Exception as e:
-        return f"網頁讀取失敗，原因：{str(e)}"
+        return f"網頁讀取失敗：{str(e)}"
 
-# --- 工時計算邏輯 (支援跨午夜) ---
+# --- 2. 工時計算邏輯 (處理選單傳回的資料) ---
 def handle_work_calc(msg_text):
     try:
         data = [i.strip() for i in msg_text.split(',')]
@@ -39,13 +43,13 @@ def handle_work_calc(msg_text):
 
         t1, t3 = parse_time(data[2]), parse_time(data[4])
         diff = (t3 - t1).total_seconds() / 3600
-        if diff < 0: diff += 24 # 處理夜班跨日計算
+        if diff < 0: diff += 24 # 支援跨午夜計算
         
         return f"📊 【工時報告】\n👤 員工：楊秦宇\n📅 班別：{shift_name}\n⏰ 累計：{diff:.2f} 小時"
     except Exception as e:
         return f"⚠️ 計算出錯：{str(e)}"
 
-# --- 刑法抽考邏輯 ---
+# --- 3. 刑法抽考邏輯 (從全國法規資料庫抓取) ---
 def get_random_criminal_law():
     try:
         base_url = "https://law.moj.gov.tw"
@@ -69,7 +73,10 @@ def get_random_criminal_law():
 def callback():
     signature = request.headers['X-Line-Signature']
     body = request.get_data(as_text=True)
-    handler.handle(body, signature)
+    try:
+        handler.handle(body, signature)
+    except InvalidSignatureError:
+        abort(400)
     return 'OK'
 
 @handler.add(MessageEvent, message=TextMessage)
