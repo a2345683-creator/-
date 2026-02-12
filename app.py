@@ -15,61 +15,57 @@ handler = WebhookHandler(os.environ.get('CHANNEL_SECRET'))
 def get_random_law_from_web():
     try:
         url = "https://law.moj.gov.tw/LawClass/LawAll.aspx?pcode=C0000001"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        # 模擬更真實的瀏覽器指紋，防止被政府網站阻擋
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
+            'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7'
+        }
         
-        response = requests.get(url, headers=headers)
+        # 加入 timeout (5秒)，防止 Render 伺服器因等待過久而斷線
+        response = requests.get(url, headers=headers, timeout=5)
+        response.encoding = 'utf-8' # 強制設定編碼
+        
         if response.status_code != 200:
-            return "連線失敗，請稍後再試。"
+            return f"政府網站回應異常 (代碼:{response.status_code})，請稍後再按一次。"
 
         soup = BeautifulSoup(response.text, 'html.parser')
-        # 抓取所有法條區塊
-        blocks = soup.find_all('div', class_='law-article')
         
-        law_database = [] # 這就是我們的「即時對照表」
+        # 1. 嘗試抓取標準標籤 (law-article)
+        articles = soup.find_all('div', class_='law-article')
+        
+        # 2. 如果標準標籤失效，嘗試抓取所有包含數字開頭的內容格 (備援方案)
+        if not articles:
+            articles = soup.find_all('div', class_='row')
 
-        for b in blocks:
-            # 1. 嘗試用標籤名抓取
-            no_tag = b.find('div', class_='line-0000')
-            content_tags = b.find_all('div', class_='line-0002')
+        law_list = []
+        for a in articles:
+            # 獲取區塊內所有文字，並進行清理
+            all_text = a.get_text(separator="|", strip=True).split("|")
             
-            # 2. 【反查機制】如果標籤抓不到，改用「位置」抓取 (抓區塊內第一個 div)
-            if not no_tag:
-                all_divs = b.find_all('div', recursive=False)
-                if len(all_divs) >= 2:
-                    no_text = all_divs[0].get_text(strip=True)
-                    content_list = [d.get_text(strip=True) for d in all_divs[1:]]
-                else:
-                    continue
-            else:
-                no_text = no_tag.get_text(strip=True)
-                content_list = [d.get_text(strip=True) for d in content_tags]
-
-            # 整理內容排版 (處理項次 1, 2, 3)
-            formatted_content = []
-            for t in content_list:
-                if t:
-                    # 如果內容是單純數字，代表是項次，幫它換行
-                    if t.isdigit():
-                        formatted_content.append(f"\n({t})")
+            if len(all_text) >= 2:
+                # 第一個非空的內容通常是條號
+                no = all_text[0]
+                # 剩下的內容組合成條文，並處理 1, 2, 3 項次的換行
+                content_parts = []
+                for p in all_text[1:]:
+                    if p.isdigit():
+                        content_parts.append(f"\n({p})")
                     else:
-                        formatted_content.append(t)
-            
-            full_text = " ".join(formatted_content).replace("\n ", "\n").strip()
-            
-            # 只要有條號且內容夠長，就存入對照表
-            if "第" in no_text and len(full_text) > 5:
-                law_database.append({"no": no_text, "content": full_text})
+                        content_parts.append(p)
+                
+                content = " ".join(content_parts).replace("\n ", "\n").strip()
+                
+                if "第" in no and len(content) > 10:
+                    law_list.append({"no": no, "content": content})
 
-        if not law_database:
-            return "資料解析失敗，請檢查網路連線。"
+        if not law_list:
+            return "目前全國法規資料庫連線不穩，建議多點擊幾次圖片按鈕試試！"
 
-        # 從對照表隨機抽題
-        target = random.choice(law_database)
-        
-        return f"📖 【刑法抽抽抽】\n\n📌 {target['no']}\n\n{target['content']}\n\n---\n資料來源：全國法規資料庫 (已啟動反查機制)"
+        target = random.choice(law_list)
+        return f"📖 【刑法抽抽抽】\n\n📌 {target['no']}\n\n{target['content']}\n\n---\n資料來源：全國法規資料庫 (強韌解析版)"
             
     except Exception as e:
-        return f"程式執行錯誤：{str(e)}"
+        return f"系統連線繁忙，請再試一次！(Error: {str(e)[:20]})"
 
 @app.route("/callback", methods=['POST'])
 def callback():
