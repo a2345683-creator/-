@@ -19,8 +19,8 @@ handler = WebhookHandler(os.environ.get('CHANNEL_SECRET'))
 @app.route('/')
 @app.route('/index.html') # 增加這行，支援兩種進站方式
 def index():
-    # 直接回傳根目錄下的 index.html 檔案
-    return send_file('index.html')
+    # 確保伺服器能從目前資料夾找到 index.html
+    return send_from_directory('.', 'index.html')
 
 # --- 工時計算邏輯 (維持強韌版) ---
 def handle_work_calc(msg_text):
