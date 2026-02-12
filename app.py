@@ -20,52 +20,57 @@ app = Flask(__name__)
 line_bot_api = LineBotApi(os.environ.get('CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.environ.get('CHANNEL_SECRET'))
 
-# --- 爬蟲核心功能：防呆加強版 ---
+# --- 終極優化版：先篩選後隨機 ---
 def get_random_criminal_law():
     try:
         url = "https://law.moj.gov.tw/LawClass/LawAll.aspx?pcode=C0000001"
-        
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
         
         response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            return "連線失敗，法務部網站暫時無法存取。"
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+        # 抓取所有法條區塊
+        all_blocks = soup.find_all('div', class_='law-article')
         
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            articles = soup.find_all('div', class_='law-article')
+        # 建立「黃金名單」：只存放真正有效的法條
+        valid_laws = []
+        
+        for block in all_blocks:
+            law_no_div = block.find('div', class_='line-0000') # 條號
+            law_content_div = block.find('div', class_='line-0002') # 內容
             
-            if not articles:
-                return "抓取失敗：找不到法條。"
-            
-            # --- 修正重點開始：嘗試最多 10 次 ---
-            for _ in range(10):
-                random_article = random.choice(articles)
+            # 只有當「條號」和「內容」都存在，且內容不是空的時候才加入
+            if law_no_div and law_content_div:
+                no_text = law_no_div.text.strip()
+                content_text = law_content_div.text.strip()
                 
-                # 先檢查這些格子存不存在 (防呆)
-                law_no_div = random_article.find('div', class_='line-0000')
-                law_content_div = random_article.find('div', class_='line-0002')
-                
-                # 只有當「條號」和「內容」都有抓到時，才回傳
-                if law_no_div and law_content_div:
-                    law_no = law_no_div.text.strip()
-                    law_content = law_content_div.text.strip()
-                    return f"【刑法隨機抽考】\n\n{law_no}\n{law_content}\n\n(資料來源：全國法規資料庫)"
-            # --- 修正重點結束 ---
-            
-            return "運氣不好，連續抽到格式不符的法條，請再試一次！"
-        else:
-            return "連線失敗，法務部網站可能暫時無法存取。"
+                # 排除掉章節標題（通常很短）或空法條
+                if no_text and content_text and "第" in no_text:
+                    valid_laws.append({
+                        "no": no_text,
+                        "content": content_text
+                    })
+        
+        if not valid_laws:
+            return "搜尋完畢，但沒找到有效的法條內容。"
+
+        # 從黃金名單隨機抽一條
+        target = random.choice(valid_laws)
+        
+        return f"【刑法隨機抽考】\n\n{target['no']}\n{target['content']}\n\n(資料來源：全國法規資料庫)"
             
     except Exception as e:
-        return f"發生錯誤：{str(e)}"
+        return f"程式執行發生錯誤：{str(e)}"
 
-# --- LINE Webhook ---
+# --- LINE Webhook 接口 ---
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
     body = request.get_data(as_text=True)
-
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
@@ -76,8 +81,8 @@ def callback():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     msg = event.message.text
-    
     if "刑法" in msg:
+        # 直接呼叫優化後的函式
         reply_text = get_random_criminal_law()
         line_bot_api.reply_message(
             event.reply_token,
