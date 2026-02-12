@@ -17,6 +17,7 @@ handler = WebhookHandler(os.environ.get('CHANNEL_SECRET'))
 
 # --- 新增：讓伺服器認得你的 index.html ---
 @app.route('/')
+@app.route('/index.html') # 增加這行，支援兩種進站方式
 def index():
     # 直接回傳根目錄下的 index.html 檔案
     return send_file('index.html')
