@@ -7,8 +7,7 @@ from bs4 import BeautifulSoup
 from flask import Flask, request, abort, render_template_string
 from linebot import LineBotApi, WebhookHandler 
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
-
+from linebot.models import MessageEvent, TextMessage, TextSendMessage, FlexSendMessage
 app = Flask(__name__)
 
 line_bot_api = LineBotApi(os.environ.get('CHANNEL_ACCESS_TOKEN'))
@@ -74,7 +73,21 @@ def get_random_criminal_law():
         return f"📖 【刑法抽抽抽】\n📌 {law_no}\n\n" + "\n".join(lines)
     except:
         return "連線繁忙"
-
+# --- 3. 台南掛號導航 Flex Message 內容 ---
+def get_hospital_flex():
+    return {
+        "type": "bubble",
+        "header": { "type": "box", "layout": "vertical", "contents": [{ "type": "text", "text": "🏥 台南醫療導航", "weight": "bold", "size": "xl", "color": "#FFFFFF" }], "backgroundColor": "#0088EE" },
+        "body": {
+            "type": "box", "layout": "vertical", "contents": [
+                { "type": "button", "action": { "type": "uri", "label": "永康奇美醫院", "uri": "https://vcloud.chimei.org.tw/OprApp/Registration/RegMenu" }, "style": "primary", "color": "#E67E22", "margin": "md" },
+                { "type": "button", "action": { "type": "uri", "label": "成大醫院", "uri": "https://service.hosp.ncku.edu.tw/Tandem/RegSelectorNet.aspx" }, "style": "primary", "color": "#3498DB", "margin": "md" },
+                { "type": "button", "action": { "type": "uri", "label": "台南市立醫院", "uri": "https://www.tmh.org.tw/TmhWebReg/RegSelectorNet.aspx" }, "style": "primary", "color": "#2ECC71", "margin": "md" },
+                { "type": "button", "action": { "type": "uri", "label": "安南醫院", "uri": "https://www.tmanh.org.tw/TmanhWebReg/RegSelectorNet.aspx" }, "style": "primary", "color": "#9B59B6", "margin": "md" },
+                { "type": "button", "action": { "type": "uri", "label": "新樓醫院", "uri": "https://reg.sinlau.org.tw/RegSelectorNet.aspx" }, "style": "primary", "color": "#7F8C8D", "margin": "md" }
+            ]
+        }
+    }
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
@@ -85,16 +98,17 @@ def callback():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     msg = event.message.text
-    try:
-        profile = line_bot_api.get_profile(event.source.user_id)
-        user_name = profile.display_name
-    except:
-        user_name = "同學"
+    # ... (獲取名稱的邏輯保留) ...
 
     if msg.startswith("工時"):
         reply = handle_work_calc(msg, user_name)
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
     elif "刑法" in msg:
         reply = get_random_criminal_law()
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+    elif "掛號" in msg: # <--- 新增這一塊
+        flex_contents = get_hospital_flex()
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="台南掛號導航", contents=flex_contents))
     else: return
     
     line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
