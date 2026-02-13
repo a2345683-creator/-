@@ -43,7 +43,6 @@ def handle_work_calc(msg_text, user_name):
         break2 = get_diff_hours(data[6], data[7])
         net_hours = total_span - break1 - break2
 
-        # 這裡已將「實作淨工時」改為「總工時」
         return (f"📊 【工時試算報告】\n"
                 f"👤 員工：{user_name}\n"
                 f"📅 班別：{shift_icon}\n"
