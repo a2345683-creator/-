@@ -73,20 +73,26 @@ def get_random_criminal_law():
         return f"📖 【刑法抽抽抽】\n📌 {law_no}\n\n" + "\n".join(lines)
     except:
         return "連線繁忙"
-# --- 3. 台南掛號導航 Flex Message 內容 ---
+# --- 3. 台南掛號導航 Flex Message (修正 404 連結) ---
 def get_hospital_flex():
     return {
-        "type": "bubble",
-        "header": { "type": "box", "layout": "vertical", "contents": [{ "type": "text", "text": "🏥 台南醫療導航", "weight": "bold", "size": "xl", "color": "#FFFFFF" }], "backgroundColor": "#0088EE" },
-        "body": {
-            "type": "box", "layout": "vertical", "contents": [
-                { "type": "button", "action": { "type": "uri", "label": "永康奇美醫院", "uri": "https://vcloud.chimei.org.tw/OprApp/Registration/RegMenu" }, "style": "primary", "color": "#E67E22", "margin": "md" },
-                { "type": "button", "action": { "type": "uri", "label": "成大醫院", "uri": "https://service.hosp.ncku.edu.tw/Tandem/RegSelectorNet.aspx" }, "style": "primary", "color": "#3498DB", "margin": "md" },
-                { "type": "button", "action": { "type": "uri", "label": "台南市立醫院", "uri": "https://www.tmh.org.tw/TmhWebReg/RegSelectorNet.aspx" }, "style": "primary", "color": "#2ECC71", "margin": "md" },
-                { "type": "button", "action": { "type": "uri", "label": "安南醫院", "uri": "https://www.tmanh.org.tw/TmanhWebReg/RegSelectorNet.aspx" }, "style": "primary", "color": "#9B59B6", "margin": "md" },
-                { "type": "button", "action": { "type": "uri", "label": "新樓醫院", "uri": "https://reg.sinlau.org.tw/RegSelectorNet.aspx" }, "style": "primary", "color": "#7F8C8D", "margin": "md" }
-            ]
-        }
+      "type": "bubble",
+      "header": { "type": "box", "layout": "vertical", "contents": [{ "type": "text", "text": "🏥 台南醫療導航", "weight": "bold", "size": "xl", "color": "#FFFFFF" }], "backgroundColor": "#0088EE" },
+      "body": {
+        "type": "box", "layout": "vertical", "contents": [
+          { "type": "button", "action": { "type": "uri", "label": "永康奇美醫院", "uri": "https://vcloud.chimei.org.tw/OprApp/Registration/RegMenu" }, "style": "primary", "color": "#E67E22", "margin": "md" },
+          { "type": "button", "action": { "type": "uri", "label": "成大醫院", "uri": "https://service.hosp.ncku.edu.tw/Tandem/RegSelectorNet.aspx" }, "style": "primary", "color": "#3498DB", "margin": "md" },
+          # 修正安南醫院連結，直接連至掛號入口
+          { "type": "button", "action": { "type": "uri", "label": "安南醫院", "uri": "https://www.tmanh.org.tw/RegSelectorNet.aspx" }, "style": "primary", "color": "#9B59B6", "margin": "md" },
+          # 修正市立醫院與部南醫院連結
+          { "type": "button", "action": { "type": "uri", "label": "台南市立醫院", "uri": "https://www.tmh.org.tw/RegSelectorNet.aspx" }, "style": "primary", "color": "#2ECC71", "margin": "md" }
+        ]
+      },
+      "footer": {
+        "type": "box", "layout": "vertical", "contents": [
+          { "type": "text", "text": "⚠️ 若無法開啟請嘗試重新整理", "size": "xs", "color": "#AAAAAA", "align": "center" }
+        ]
+      }
     }
 @app.route("/callback", methods=['POST'])
 def callback():
