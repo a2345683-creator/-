@@ -79,12 +79,12 @@ def get_hospital_flex():
       "header": { "type": "box", "layout": "vertical", "contents": [{ "type": "text", "text": "🏥 台南醫療導航", "weight": "bold", "size": "xl", "color": "#FFFFFF" }], "backgroundColor": "#0088EE" },
       "body": {
         "type": "box", "layout": "vertical", "contents": [
-          { "type": "button", "action": { "type": "uri", "label": "永康奇美醫院", "uri": "https://vcloud.chimei.org.tw/OprApp/Registration/RegMenu" }, "style": "primary", "color": "#E67E22", "margin": "md" },
-          { "type": "button", "action": { "type": "uri", "label": "成大醫院", "uri": "https://service.hosp.ncku.edu.tw/Tandem/RegSelectorNet.aspx" }, "style": "primary", "color": "#3498DB", "margin": "md" },
+          { "type": "button", "action": { "type": "uri", "label": "奇美醫院", "uri": "https://www.chimei.org.tw/newindex/opd/opd.html" }, "style": "primary", "color": "#E67E22", "margin": "md" },
+          { "type": "button", "action": { "type": "uri", "label": "成大醫院", "uri": "https://tandem.hosp.ncku.edu.tw/tandem/DeptUI.aspx" }, "style": "primary", "color": "#3498DB", "margin": "md" },
           # 修正安南醫院連結，直接連至掛號入口
-          { "type": "button", "action": { "type": "uri", "label": "安南醫院", "uri": "https://www.tmanh.org.tw/RegSelectorNet.aspx" }, "style": "primary", "color": "#9B59B6", "margin": "md" },
+          { "type": "button", "action": { "type": "uri", "label": "安南醫院", "uri": "https://www.tmanh.org.tw/Service/OnlineAppointment" }, "style": "primary", "color": "#9B59B6", "margin": "md" },
           # 修正市立醫院與部南醫院連結
-          { "type": "button", "action": { "type": "uri", "label": "台南市立醫院", "uri": "https://www.tmh.org.tw/RegSelectorNet.aspx" }, "style": "primary", "color": "#2ECC71", "margin": "md" }
+          { "type": "button", "action": { "type": "uri", "label": "新樓醫院", "uri": "https://rt01.sinlau.org.tw/sinlau/rt01/" }, "style": "primary", "color": "#2ECC71", "margin": "md" }
         ]
       },
       "footer": {
