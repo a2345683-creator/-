@@ -24,7 +24,7 @@ def index():
     except Exception as e:
         return f"網頁讀取失敗：{str(e)}"
 
-# --- 1. 工時計算邏輯 (名稱更換為總工時) ---
+# --- 1. 工時計算邏輯 (修正版：支援 HH:MM 與 HH:MM:SS) ---
 def handle_work_calc(msg_text, user_name):
     try:
         data = [i.strip() for i in msg_text.split(',')]
@@ -33,10 +33,16 @@ def handle_work_calc(msg_text, user_name):
         shift_icon = "日班 ☀️" if data[1] == 'D' else "夜班 🌙"
 
         def get_diff_hours(start_str, end_str):
-            fmt = "%H:%M"
-            s, e = datetime.strptime(start_str, fmt), datetime.strptime(end_str, fmt)
-            diff = (e - s).total_seconds() / 3600
-            return diff + 24 if diff < 0 else diff
+            # 依序嘗試兩種格式，解決 LIFF 傳入秒數導致崩潰的問題
+            for fmt in ("%H:%M", "%H:%M:%S"):
+                try:
+                    s = datetime.strptime(start_str, fmt)
+                    e = datetime.strptime(end_str, fmt)
+                    diff = (e - s).total_seconds() / 3600
+                    return diff + 24 if diff < 0 else diff
+                except:
+                    continue
+            raise ValueError("格式錯誤")
 
         total_span = get_diff_hours(data[2], data[3])
         break1 = get_diff_hours(data[4], data[5])
@@ -47,8 +53,8 @@ def handle_work_calc(msg_text, user_name):
                 f"👤 員工：{user_name}\n"
                 f"📅 班別：{shift_icon}\n"
                 f"----------------\n"
-                f"🍽️ 總休息：{(break1 + break2):.2f} 小時\n"
-                f"✅ 總工時：{net_hours:.2f} 小時")
+                f"🍽️ 總休息：{(break1 + break2):.2f} hr\n"
+                f"✅ 總工時：{max(0, net_hours):.2f} hr")
     except Exception as e:
         return f"⚠️ 計算失敗：{str(e)}"
 
@@ -103,20 +109,28 @@ def callback():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     msg = event.message.text
-    # ... (獲取名稱的邏輯保留) ...
+    # 獲取使用者名稱
+    try:
+        profile = line_bot_api.get_profile(event.source.user_id)
+        user_name = profile.display_name
+    except:
+        user_name = "同學"
+
+    reply_msg = None
 
     if msg.startswith("工時"):
-        reply = handle_work_calc(msg, user_name)
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+        content = handle_work_calc(msg, user_name)
+        reply_msg = TextSendMessage(text=content)
     elif "刑法" in msg:
-        reply = get_random_criminal_law()
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
-    elif "掛號" in msg: # <--- 新增這一塊
+        content = get_random_criminal_law()
+        reply_msg = TextSendMessage(text=content)
+    elif "掛號" in msg:
         flex_contents = get_hospital_flex()
-        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="台南掛號導航", contents=flex_contents))
-    else: return
+        reply_msg = FlexSendMessage(alt_text="台南掛號導航", contents=flex_contents)
     
-    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+    # 確保只會回覆一次，且有內容才回覆
+    if reply_msg:
+        line_bot_api.reply_message(event.reply_token, reply_msg)
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
