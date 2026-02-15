@@ -175,7 +175,7 @@ def callback():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     msg = event.message.text
-    # 獲取使用者名稱
+    # 獲取使用者名稱 (若抓不到則預設為"同學")
     try:
         profile = line_bot_api.get_profile(event.source.user_id)
         user_name = profile.display_name
@@ -184,21 +184,25 @@ def handle_message(event):
 
     reply_msg = None
 
+    # --- 邏輯判斷區 (請確保每行 elif 前面都是 4 個空格) ---
     if msg.startswith("工時"):
         content = handle_work_calc(msg, user_name)
         reply_msg = TextSendMessage(text=content)
+        
     elif "刑法" in msg:
         content = get_random_criminal_law()
         reply_msg = TextSendMessage(text=content)
+        
     elif "掛號" in msg:
         flex_contents = get_hospital_flex()
         reply_msg = FlexSendMessage(alt_text="台南掛號導航", contents=flex_contents)
-   elif "539" in msg:
-        # 呼叫時傳入獲取到的名稱
-        reply_text = get_539_premium_prediction(user_name)
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
-    
-    # 確保只會回覆一次，且有內容才回覆
+        
+    elif "539" in msg:
+        # 呼叫 539 預測並傳入使用者名稱
+        content = get_539_premium_prediction(user_name)
+        reply_msg = TextSendMessage(text=content)
+
+    # --- 最終統一回覆 (確保 Reply Token 唯一性) ---
     if reply_msg:
         line_bot_api.reply_message(event.reply_token, reply_msg)
 
