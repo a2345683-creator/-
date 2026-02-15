@@ -97,45 +97,50 @@ def get_hospital_flex():
         ]
       }
     }
-   # --- 4. 539 精選過濾模式 (加強版：修正解析異常) ---
+   # --- 4. 539 精選過濾模式 (官方網站數據源版) ---
 def get_539_premium_prediction():
     import random
     from collections import Counter
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
-        # 更換為結構較為固定的歷史資料頁面
-        url = "https://www.lotto-8.com/list539.asp"
+        # 使用你截圖中的官方網址
+        url = "https://www.taiwanlottery.com/lotto/result/traditional?game=daily_cash"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'https://www.taiwanlottery.com/'
+        }
+        
         res = requests.get(url, headers=headers, timeout=15)
         res.encoding = 'utf-8'
-        
         soup = BeautifulSoup(res.text, 'html.parser')
-        # 尋找網頁表格中的號碼欄位
-        cells = soup.find_all('td', class_='table_td_2')
-        all_nums = []
-        for cell in cells:
-            content = cell.get_text(strip=True)
-            # 抓取 01-39 之間的數字
-            nums = re.findall(r'0[1-9]|[1-2][0-9]|3[0-9]', content)
-            all_nums.extend([int(n) for n in nums])
         
-        # 門檻降低，確保只要有抓到基礎數據就能跑
+        # 根據官網結構抓取獎號 (大小順序行的數字)
+        all_nums = []
+        # 尋找包含獎號的表格單元格
+        # 官網結構通常將獎號放在特定的 class 中，這裡使用正則彈性抓取
+        raw_text = soup.get_text()
+        # 匹配 01-39 的獨立數字
+        found_nums = re.findall(r'\b(?:0[1-9]|[12][0-9]|3[0-9])\b', raw_text)
+        all_nums = [int(n) for n in found_nums if 1 <= int(n) <= 39]
+        
+        # 確保有抓到基礎數據
         if len(all_nums) < 25: 
-            return "⚠️ 目前數據更新中，請稍後點擊「539精選」重試。"
+            return "⚠️ 官網數據讀取中，請稍後重試。"
 
-        # 統計近期的冷熱號 (前 500 個號碼)
+        # 統計分析 (取近期數據)
         counts = Counter(all_nums[:500])
         hot_nums = [n for n, c in counts.most_common(12)]
         cold_nums = [n for n, c in sorted(counts.items(), key=lambda x: x[1])[:12]]
         pool = list(set(hot_nums + cold_nums))
 
         best_pick = None
-        for _ in range(1000): # 進行 1000 次大數據模擬
+        # 1000 次模擬篩選符合大數據常態的組合
+        for _ in range(1000):
             candidate = sorted(random.sample(pool, 5))
             total_sum = sum(candidate)
             odds = len([n for n in candidate if n % 2 != 0])
             bigs = len([n for n in candidate if n >= 20])
             
-            # 過濾條件：總和 75-125、奇偶不極端、大小不極端
+            # 過濾門檻：總和 75-125、奇偶不極端、大小不極端
             if (75 <= total_sum <= 125) and (0 < odds < 5) and (0 < bigs < 5):
                 best_pick = candidate
                 break
@@ -143,16 +148,17 @@ def get_539_premium_prediction():
         if not best_pick: best_pick = sorted(random.sample(pool, 5))
         
         formatted_nums = ", ".join([str(n).zfill(2) for n in best_pick])
-        return (f"💎 【539 大數據精選報告】\n"
+        return (f"💎 【539 官方大數據精選號碼】\n"
                 f"🎲 推薦號碼：{formatted_nums}\n"
                 f"----------------\n"
                 f"📊 篩選指標：\n"
                 f"● 總和：{sum(best_pick)} | 奇偶：{5-odds}偶:{odds}奇\n"
-                f"✨ 通過數據模擬，祝秦宇好運連連！")
+                f"● 來源：台灣彩券官方網站\n"
+                f"✨ 通過數據模擬，祝您順利中獎！")
                 
     except Exception as e:
-        print(f"539 Error: {str(e)}") # 輸出錯誤到 Render 日誌
-        return "⚠️ 系統連線繁忙，請再點選一次嘗試。"
+        print(f"Lotto Error: {str(e)}")
+        return "⚠️ 官方網站連線中，請稍後再試。"
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
