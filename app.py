@@ -194,9 +194,9 @@ def handle_message(event):
         reply_msg = FlexSendMessage(alt_text="台南掛號導航", contents=flex_contents)
         
     elif "539" in msg:
-        # 呼叫 539 預測並傳入使用者名稱
-        content = get_539_premium_prediction(user_name)
-        reply_msg = TextSendMessage(text=content)
+        # ⚠️ 注意：這裡必須改成 system_prediction，與下方定義一致
+        reply_text = get_539_system_prediction(user_name)
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
 
     # --- 最終統一回覆 (確保 Reply Token 唯一性) ---
     if reply_msg:
