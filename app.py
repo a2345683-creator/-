@@ -97,35 +97,26 @@ def get_hospital_flex():
         ]
       }
     }
- # --- 4. 539 精選過濾模式 (奧索數據源版) ---
-def get_539_premium_prediction():
+# --- 4. 539 大數據精選 + ROI 回測系統 (動態姓名版) ---
+def get_539_premium_prediction(user_name): # <--- 這裡加入了參數
     import random
     import urllib3
     from collections import Counter
-    # 略過 SSL 驗證警告
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     
     try:
-        # 使用你提供的奧索樂透網網址
         url = "https://lotto.auzonet.com/dist_daily539.html"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
-        
-        # 解決 image_c6bc05.png 提到的 SSL 驗證失敗問題
+        headers = {'User-Agent': 'Mozilla/5.0'}
         res = requests.get(url, headers=headers, timeout=15, verify=False)
         res.encoding = 'utf-8'
         soup = BeautifulSoup(res.text, 'html.parser')
         
-        # 抓取表格中標記為號碼的欄位
-        # 該網頁通常會顯示 1-39 的網格，我們直接抓取網頁中所有的 01-39 數字
         raw_text = soup.get_text()
         found_nums = re.findall(r'\b(?:0[1-9]|[12][0-9]|3[0-9])\b', raw_text)
         all_nums = [int(n) for n in found_nums if 1 <= int(n) <= 39]
         
-        # 確保數據量足夠 (100期應有500個數字)
-        if len(all_nums) < 100:
-            return "⚠️ 數據解析異常，請稍後點擊重試。"
+        if len(all_nums) < 100: return "⚠️ 數據擷取異常"
 
-        # 統計與篩選邏輯
         counts = Counter(all_nums[:500])
         hot_nums = [n for n, c in counts.most_common(12)]
         cold_nums = [n for n, c in sorted(counts.items(), key=lambda x: x[1])[:12]]
@@ -134,29 +125,46 @@ def get_539_premium_prediction():
         best_pick = None
         for _ in range(1000):
             candidate = sorted(random.sample(pool, 5))
-            total_sum = sum(candidate)
-            odds = len([n for n in candidate if n % 2 != 0])
-            bigs = len([n for n in candidate if n >= 20])
-            
-            # 過濾條件：總和 75-125、奇偶不極端、大小不極端
-            if (75 <= total_sum <= 125) and (0 < odds < 5) and (0 < bigs < 5):
+            t_sum, odds, bigs = sum(candidate), len([n for n in candidate if n%2!=0]), len([n for n in candidate if n>=20])
+            if (75 <= t_sum <= 125) and (0 < odds < 5) and (0 < bigs < 5):
                 best_pick = candidate
                 break
         
-        if not best_pick: best_pick = sorted(random.sample(pool, 5))
+        best_pick = best_pick or sorted(random.sample(pool, 5))
+        pick_set = set(best_pick)
+
+        # ROI 回測計算 (略...)
+        cost = 5000
+        prizes = {5: 8000000, 4: 20000, 3: 300, 2: 50}
+        win_counts = {5: 0, 4: 0, 3: 0, 2: 0}
         
+        for i in range(0, 500, 5):
+            draw = set(all_nums[i:i+5])
+            match_count = len(pick_set.intersection(draw))
+            if match_count in prizes:
+                win_counts[match_count] += 1
+        
+        total_win = sum(win_counts[k] * prizes[k] for k in prizes)
+        net_profit = total_win - cost
+        roi = (net_profit / cost) * 100
+
         formatted_nums = ", ".join([str(n).zfill(2) for n in best_pick])
-        return (f"💎 【539 大數據精選】\n"
-                f"🎲 推薦號碼：{formatted_nums}\n"
+        
+        # --- 這裡將秦宇改為 {user_name} ---
+        return (f"💎 【539 精選與 ROI 報告】\n"
+                f"🔢 推薦號碼：{formatted_nums}\n"
                 f"----------------\n"
-                f"📊 篩選指標：\n"
-                f"● 總和：{sum(best_pick)} | 奇偶：{5-odds}偶:{odds}奇\n"
-                f"● 數據：近 100 期號碼分佈\n"
-                f"✨ 通過 1000 次數據模擬，祝順利中獎！")
+                f"📊 近 100 期回測結果：\n"
+                f"● 投入成本：$5,000\n"
+                f"● 累計獎金：${total_win:,}\n"
+                f"● 淨損益：{'+' if net_profit >= 0 else ''}${net_profit:,}\n"
+                f"● 投資報酬率：{roi:.1f}%\n"
+                f"----------------\n"
+                f"🏆 中獎明細：{win_counts[3]}次3碼 / {win_counts[2]}次2碼\n"
+                f"✨ {user_name}，數據顯示此組合分佈穩健！") # <--- 動態稱呼
                 
     except Exception as e:
-        print(f"Lotto Error: {str(e)}")
-        return "⚠️ 目前網路連線繁忙，請再點選一次嘗試。"
+        return f"⚠️ 計算異常：{str(e)}"
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
@@ -185,8 +193,9 @@ def handle_message(event):
     elif "掛號" in msg:
         flex_contents = get_hospital_flex()
         reply_msg = FlexSendMessage(alt_text="台南掛號導航", contents=flex_contents)
-    elif "539" in msg:
-        reply_text = get_539_premium_prediction()
+   elif "539" in msg:
+        # 呼叫時傳入獲取到的名稱
+        reply_text = get_539_premium_prediction(user_name)
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
     
     # 確保只會回覆一次，且有內容才回覆
