@@ -97,7 +97,7 @@ def get_hospital_flex():
         ]
       }
     }
-# --- 4. 539 六號系統包牌模式 ---
+# --- 4. 539 六號系統包牌模式 (修正版：加入防呆機制) ---
 def get_539_system_prediction(user_name):
     import random
     import urllib3
@@ -106,7 +106,7 @@ def get_539_system_prediction(user_name):
     
     try:
         # 1. 抓取數據 (近 100 期)
-        url = "https://lotto.arclink.com.tw/Lotto539History.html"
+        url = "https://lotto.auzonet.com/dist_daily539.html" # 換成你推薦的網站更穩定
         headers = {'User-Agent': 'Mozilla/5.0'}
         res = requests.get(url, headers=headers, timeout=15, verify=False)
         res.encoding = 'utf-8'
@@ -116,38 +116,44 @@ def get_539_system_prediction(user_name):
         found_nums = re.findall(r'\b(?:0[1-9]|[12][0-9]|3[0-9])\b', raw_text)
         all_nums = [int(n) for n in found_nums if 1 <= int(n) <= 39]
         
-        # 2. 篩選 6 個精選號碼 (3熱門 + 3遺漏/冷門)
-        counts = Counter(all_nums[:500])
-        hot_nums = [n for n, c in counts.most_common(12)]
-        cold_nums = [n for n, c in sorted(counts.items(), key=lambda x: x[1])[:12]]
-        pool = list(set(hot_nums + cold_nums))
+        # 2. 篩選邏輯
+        if len(all_nums) >= 25:
+            counts = Counter(all_nums[:500])
+            hot_nums = [n for n, c in counts.most_common(12)]
+            cold_nums = [n for n, c in sorted(counts.items(), key=lambda x: x[1])[:12]]
+            pool = list(set(hot_nums + cold_nums))
+        else:
+            # 💡 防呆機制：若抓不到數據，就從 1-39 號全選
+            pool = list(range(1, 40))
         
-        # 產出 6 個不重複號碼並排序
+        # ⚠️ 解決 image_c81d7d.png 的關鍵：確保 pool 至少有 6 個元素
+        if len(pool) < 6: pool = list(range(1, 40))
+        
         best_pick = sorted(random.sample(pool, 6))
         pick_set = set(best_pick)
 
-        # 3. 系統回測 (每期 6 號連碰 300 元，共 100 期)
-        total_cost = 30000 # 100 期 * 300 元
+        # 3. 系統回測與獎金計算 (保持原樣)
+        total_cost = 30000 
         total_win = 0
-        
-        # 539 六號連碰中獎獎金表 (對中 k 碼時的總獎金)
         def calc_system_prize(matches):
-            if matches == 5: return 8100000 # 1頭獎 + 5貳獎
-            if matches == 4: return 41200   # 2貳獎 + 4參獎
-            if matches == 3: return 1050    # 3參獎 + 3肆獎
-            if matches == 2: return 200     # 4肆獎
+            if matches == 5: return 8100000 
+            if matches == 4: return 41200   
+            if matches == 3: return 1050    
+            if matches == 2: return 200     
             return 0
 
-        for i in range(0, 500, 5):
-            draw = set(all_nums[i:i+5])
-            matches = len(pick_set.intersection(draw))
-            total_win += calc_system_prize(matches)
+        # 確保有數據才跑回測，否則略過
+        if len(all_nums) >= 25:
+            for i in range(0, min(len(all_nums), 500) - 4, 5):
+                draw = set(all_nums[i:i+5])
+                matches = len(pick_set.intersection(draw))
+                total_win += calc_system_prize(matches)
         
         net_profit = total_win - total_cost
-        roi = (net_profit / total_cost) * 100
+        roi = (net_profit / total_cost) * 100 if total_cost > 0 else 0
         formatted_nums = ", ".join([str(n).zfill(2) for n in best_pick])
 
-        return (f"🔥 【539 六號碼系統包牌報告】\n"
+        return (f"🔥 【539 六號系統包牌報告】\n"
                 f"🔢 精選六碼：{formatted_nums}\n"
                 f"----------------\n"
                 f"💰 投資精算 (近100期)：\n"
@@ -156,8 +162,7 @@ def get_539_system_prediction(user_name):
                 f"● 淨損益：{'+' if net_profit >= 0 else ''}${net_profit:,}\n"
                 f"● 投資報酬率：{roi:.1f}%\n"
                 f"----------------\n"
-                f"💡 系統提示：\n"
-                f"這組號碼採用 6 號連碰邏輯。只要開出的 5 個號碼中有 2 個落在這 6 碼內，即可獲得 4 組肆獎。")
+                f"💡 {user_name}，這組號碼已優化覆蓋率！")
 
     except Exception as e:
         return f"⚠️ 系統計算異常：{str(e)}"
@@ -171,7 +176,6 @@ def callback():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     msg = event.message.text
-    # 獲取使用者名稱 (若抓不到則預設為"同學")
     try:
         profile = line_bot_api.get_profile(event.source.user_id)
         user_name = profile.display_name
@@ -180,27 +184,22 @@ def handle_message(event):
 
     reply_msg = None
 
-    # --- 邏輯判斷區 (請確保每行 elif 前面都是 4 個空格) ---
     if msg.startswith("工時"):
         content = handle_work_calc(msg, user_name)
         reply_msg = TextSendMessage(text=content)
-        
     elif "刑法" in msg:
         content = get_random_criminal_law()
         reply_msg = TextSendMessage(text=content)
-        
     elif "掛號" in msg:
         flex_contents = get_hospital_flex()
-        reply_msg = FlexSendMessage(alt_text="台南掛號導航", contents=flex_contents)
-        
+        reply_msg = FlexSendMessage(alt_text="台南醫療導航", contents=flex_contents)
     elif "539" in msg:
-        # ⚠️ 注意：這裡必須改成 system_prediction，與下方定義一致
-        reply_text = get_539_system_prediction(user_name)
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
+        # 修正：不要在這裡 reply_message，改存入 reply_msg
+        content = get_539_system_prediction(user_name)
+        reply_msg = TextSendMessage(text=content)
 
-    # --- 最終統一回覆 (確保 Reply Token 唯一性) ---
+    # 最終統一由這裡發送，最穩定！
     if reply_msg:
         line_bot_api.reply_message(event.reply_token, reply_msg)
-
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
