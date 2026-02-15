@@ -106,7 +106,7 @@ def get_539_premium_prediction():
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     
     try:
-        url = "https://www.taiwanlottery.com/lotto/result/traditional?game=daily_cash"
+        url = "http://www.9800.com.tw/html/a5/"
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
         
         # 關鍵修正：加入 verify=False 略過憑證檢查
@@ -119,11 +119,11 @@ def get_539_premium_prediction():
         found_nums = re.findall(r'\b(?:0[1-9]|[12][0-9]|3[0-9])\b', raw_text)
         all_nums = [int(n) for n in found_nums if 1 <= int(n) <= 39]
         
-        if len(all_nums) < 25: 
+        if len(all_nums) < 100: 
             return "⚠️ 數據量不足，請稍後點擊「539精選」重試。"
 
         # 大數據分析：取近期前 500 個號碼統計冷熱
-        counts = Counter(all_nums[:500])
+        counts = Counter(all_nums[:100])
         hot_nums = [n for n, c in counts.most_common(12)]
         cold_nums = [n for n, c in sorted(counts.items(), key=lambda x: x[1])[:12]]
         pool = list(set(hot_nums + cold_nums))
@@ -140,12 +140,12 @@ def get_539_premium_prediction():
         best_pick = best_pick or sorted(random.sample(pool, 5))
         formatted_nums = ", ".join([str(n).zfill(2) for n in best_pick])
         
-        return (f"💎 【539 官方大數據精選】\n"
+        return (f"💎 【539 大數據精選號碼】\n"
                 f"🎲 推薦號碼：{formatted_nums}\n"
                 f"----------------\n"
                 f"📊 篩選指標：\n"
                 f"● 總和：{sum(best_pick)} | 奇偶：{5-odds}偶:{odds}奇\n"
-                f"✨ 通過 1000 次數據模擬，祝秦宇中大獎！")
+                f"✨ 通過 1000 次數據模擬，祝您中大獎！")
     except Exception as e:
         print(f"Lotto Error Trace: {str(e)}") # 輸出至日誌
         return "⚠️ 官方網站連線中，請稍後再試一次。"
