@@ -148,7 +148,7 @@ def get_539_premium_prediction():
         if not best_pick: best_pick = sorted(random.sample(pool, 5))
         
         formatted_nums = ", ".join([str(n).zfill(2) for n in best_pick])
-        return (f"💎 【539 官方大數據精選號碼】\n"
+        return (f"💎 【539 官方大數據精選】\n"
                 f"🎲 推薦號碼：{formatted_nums}\n"
                 f"----------------\n"
                 f"📊 篩選指標：\n"
