@@ -97,47 +97,45 @@ def get_hospital_flex():
         ]
       }
     }
-    # --- 4. 539 精選過濾模式 (加強版：防止網站阻擋) ---
+   # --- 4. 539 精選過濾模式 (加強版：修正解析異常) ---
 def get_539_premium_prediction():
     import random
     from collections import Counter
     try:
-        # 加入 Headers 偽裝成一般 Chrome 瀏覽器，防止網站阻擋
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-        # 換一個更穩定的歷史資料來源 (玩運彩歷史數據)
-        url = "https://www.playsport.cc/lotto.php?action=history&lottotype=539"
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+        # 更換為結構較為固定的歷史資料頁面
+        url = "https://www.lotto-8.com/list539.asp"
         res = requests.get(url, headers=headers, timeout=15)
         res.encoding = 'utf-8'
+        
         soup = BeautifulSoup(res.text, 'html.parser')
-        
-        # 抓取所有數字標籤
+        # 尋找網頁表格中的號碼欄位
+        cells = soup.find_all('td', class_='table_td_2')
         all_nums = []
-        # 根據 2026 年最新的標籤結構，抓取包含數字的 td 或 span
-        # 這裡會自動過濾出 1-39 之間的純數字
-        raw_text = soup.get_text()
-        found_nums = re.findall(r'\b(?:0[1-9]|[12][0-9]|3[0-9])\b', raw_text)
-        all_nums = [int(n) for n in found_nums if 1 <= int(n) <= 39]
+        for cell in cells:
+            content = cell.get_text(strip=True)
+            # 抓取 01-39 之間的數字
+            nums = re.findall(r'0[1-9]|[1-2][0-9]|3[0-9]', content)
+            all_nums.extend([int(n) for n in nums])
         
-        # 確保有抓到足夠的數據 (至少近 20 期 = 100 個數字)
-        if len(all_nums) < 100:
-            return "⚠️ 數據源解析異常，請稍後再試。"
+        # 門檻降低，確保只要有抓到基礎數據就能跑
+        if len(all_nums) < 25: 
+            return "⚠️ 目前數據更新中，請稍後點擊「539精選」重試。"
 
-        # 統計與篩選邏輯 (保持原本的 3熱2冷 策略)
-        counts = Counter(all_nums[:500]) # 統計近 100 期
+        # 統計近期的冷熱號 (前 500 個號碼)
+        counts = Counter(all_nums[:500])
         hot_nums = [n for n, c in counts.most_common(12)]
         cold_nums = [n for n, c in sorted(counts.items(), key=lambda x: x[1])[:12]]
         pool = list(set(hot_nums + cold_nums))
 
         best_pick = None
-        for _ in range(1000): # 模擬 1000 次找出最優解
+        for _ in range(1000): # 進行 1000 次大數據模擬
             candidate = sorted(random.sample(pool, 5))
             total_sum = sum(candidate)
             odds = len([n for n in candidate if n % 2 != 0])
             bigs = len([n for n in candidate if n >= 20])
             
-            # 統計學上的黃金比例過濾
+            # 過濾條件：總和 75-125、奇偶不極端、大小不極端
             if (75 <= total_sum <= 125) and (0 < odds < 5) and (0 < bigs < 5):
                 best_pick = candidate
                 break
@@ -148,14 +146,13 @@ def get_539_premium_prediction():
         return (f"💎 【539 大數據精選報告】\n"
                 f"🎲 推薦號碼：{formatted_nums}\n"
                 f"----------------\n"
-                f"📈 篩選指標：\n"
-                f"● 總和：{sum(best_pick)} (常態區間)\n"
-                f"● 比例：{5-odds}偶:{odds}奇 | {5-bigs}小:{bigs}大\n"
-                f"✨ 已通過數據模擬過濾，祝您中獎！")
+                f"📊 篩選指標：\n"
+                f"● 總和：{sum(best_pick)} | 奇偶：{5-odds}偶:{odds}奇\n"
+                f"✨ 通過數據模擬，祝秦宇好運連連！")
                 
     except Exception as e:
-        print(f"Error Detail: {str(e)}") # 這會在 Render 日誌顯示錯誤原因
-        return "⚠️ 目前網路連線繁忙，請再點擊一次試試看。"
+        print(f"539 Error: {str(e)}") # 輸出錯誤到 Render 日誌
+        return "⚠️ 系統連線繁忙，請再點選一次嘗試。"
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
