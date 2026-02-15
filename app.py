@@ -106,7 +106,7 @@ def get_539_premium_prediction():
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     
     try:
-        url = "http://www.9800.com.tw/html/a5/"
+        url = "https://lotto.auzonet.com/dist_daily539.html"
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
         
         # 關鍵修正：加入 verify=False 略過憑證檢查
@@ -119,11 +119,11 @@ def get_539_premium_prediction():
         found_nums = re.findall(r'\b(?:0[1-9]|[12][0-9]|3[0-9])\b', raw_text)
         all_nums = [int(n) for n in found_nums if 1 <= int(n) <= 39]
         
-        if len(all_nums) < 100: 
+        if len(all_nums) < 500: 
             return "⚠️ 數據量不足，請稍後點擊「539精選」重試。"
 
         # 大數據分析：取近期前 500 個號碼統計冷熱
-        counts = Counter(all_nums[:100])
+        counts = Counter(all_nums[:500])
         hot_nums = [n for n, c in counts.most_common(12)]
         cold_nums = [n for n, c in sorted(counts.items(), key=lambda x: x[1])[:12]]
         pool = list(set(hot_nums + cold_nums))
