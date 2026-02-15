@@ -97,15 +97,16 @@ def get_hospital_flex():
         ]
       }
     }
-# --- 4. 539 大數據精選 + ROI 回測系統 (動態姓名版) ---
-def get_539_premium_prediction(user_name): # <--- 這裡加入了參數
+# --- 4. 539 六號系統包牌模式 ---
+def get_539_system_prediction(user_name):
     import random
     import urllib3
     from collections import Counter
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     
     try:
-        url = "https://lotto.auzonet.com/dist_daily539.html"
+        # 1. 抓取數據 (近 100 期)
+        url = "https://lotto.arclink.com.tw/Lotto539History.html"
         headers = {'User-Agent': 'Mozilla/5.0'}
         res = requests.get(url, headers=headers, timeout=15, verify=False)
         res.encoding = 'utf-8'
@@ -115,56 +116,51 @@ def get_539_premium_prediction(user_name): # <--- 這裡加入了參數
         found_nums = re.findall(r'\b(?:0[1-9]|[12][0-9]|3[0-9])\b', raw_text)
         all_nums = [int(n) for n in found_nums if 1 <= int(n) <= 39]
         
-        if len(all_nums) < 100: return "⚠️ 數據擷取異常"
-
+        # 2. 篩選 6 個精選號碼 (3熱門 + 3遺漏/冷門)
         counts = Counter(all_nums[:500])
         hot_nums = [n for n, c in counts.most_common(12)]
         cold_nums = [n for n, c in sorted(counts.items(), key=lambda x: x[1])[:12]]
         pool = list(set(hot_nums + cold_nums))
-
-        best_pick = None
-        for _ in range(1000):
-            candidate = sorted(random.sample(pool, 5))
-            t_sum, odds, bigs = sum(candidate), len([n for n in candidate if n%2!=0]), len([n for n in candidate if n>=20])
-            if (75 <= t_sum <= 125) and (0 < odds < 5) and (0 < bigs < 5):
-                best_pick = candidate
-                break
         
-        best_pick = best_pick or sorted(random.sample(pool, 5))
+        # 產出 6 個不重複號碼並排序
+        best_pick = sorted(random.sample(pool, 6))
         pick_set = set(best_pick)
 
-        # ROI 回測計算 (略...)
-        cost = 5000
-        prizes = {5: 8000000, 4: 20000, 3: 300, 2: 50}
-        win_counts = {5: 0, 4: 0, 3: 0, 2: 0}
+        # 3. 系統回測 (每期 6 號連碰 300 元，共 100 期)
+        total_cost = 30000 # 100 期 * 300 元
+        total_win = 0
         
+        # 539 六號連碰中獎獎金表 (對中 k 碼時的總獎金)
+        def calc_system_prize(matches):
+            if matches == 5: return 8100000 # 1頭獎 + 5貳獎
+            if matches == 4: return 41200   # 2貳獎 + 4參獎
+            if matches == 3: return 1050    # 3參獎 + 3肆獎
+            if matches == 2: return 200     # 4肆獎
+            return 0
+
         for i in range(0, 500, 5):
             draw = set(all_nums[i:i+5])
-            match_count = len(pick_set.intersection(draw))
-            if match_count in prizes:
-                win_counts[match_count] += 1
+            matches = len(pick_set.intersection(draw))
+            total_win += calc_system_prize(matches)
         
-        total_win = sum(win_counts[k] * prizes[k] for k in prizes)
-        net_profit = total_win - cost
-        roi = (net_profit / cost) * 100
-
+        net_profit = total_win - total_cost
+        roi = (net_profit / total_cost) * 100
         formatted_nums = ", ".join([str(n).zfill(2) for n in best_pick])
-        
-        # --- 這裡將秦宇改為 {user_name} ---
-        return (f"💎 【539 精選與 ROI 報告】\n"
-                f"🔢 推薦號碼：{formatted_nums}\n"
+
+        return (f"🔥 【539 六號碼系統包牌報告】\n"
+                f"🔢 精選六碼：{formatted_nums}\n"
                 f"----------------\n"
-                f"📊 近 100 期回測結果：\n"
-                f"● 投入成本：$5,000\n"
-                f"● 累計獎金：${total_win:,}\n"
+                f"💰 投資精算 (近100期)：\n"
+                f"● 包牌成本：$30,000\n"
+                f"● 累計回補：${total_win:,}\n"
                 f"● 淨損益：{'+' if net_profit >= 0 else ''}${net_profit:,}\n"
                 f"● 投資報酬率：{roi:.1f}%\n"
                 f"----------------\n"
-                f"🏆 中獎明細：{win_counts[3]}次3碼 / {win_counts[2]}次2碼\n"
-                f"✨ {user_name}，數據顯示此組合分佈穩健！") # <--- 動態稱呼
-                
+                f"💡 系統提示：\n"
+                f"這組號碼採用 6 號連碰邏輯。只要開出的 5 個號碼中有 2 個落在這 6 碼內，即可獲得 4 組肆獎。")
+
     except Exception as e:
-        return f"⚠️ 計算異常：{str(e)}"
+        return f"⚠️ 系統計算異常：{str(e)}"
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
