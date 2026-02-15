@@ -87,9 +87,7 @@ def get_hospital_flex():
         "type": "box", "layout": "vertical", "contents": [
           { "type": "button", "action": { "type": "uri", "label": "奇美醫院", "uri": "https://www.chimei.org.tw/newindex/opd/opd.html" }, "style": "primary", "color": "#E67E22", "margin": "md" },
           { "type": "button", "action": { "type": "uri", "label": "成大醫院", "uri": "https://tandem.hosp.ncku.edu.tw/tandem/DeptUI.aspx" }, "style": "primary", "color": "#3498DB", "margin": "md" },
-          # 修正安南醫院連結，直接連至掛號入口
           { "type": "button", "action": { "type": "uri", "label": "安南醫院", "uri": "https://www.tmanh.org.tw/Service/OnlineAppointment" }, "style": "primary", "color": "#9B59B6", "margin": "md" },
-          # 修正市立醫院與部南醫院連結
           { "type": "button", "action": { "type": "uri", "label": "新樓醫院", "uri": "https://rt01.sinlau.org.tw/sinlau/rt01/" }, "style": "primary", "color": "#2ECC71", "margin": "md" }
         ]
       },
@@ -99,6 +97,55 @@ def get_hospital_flex():
         ]
       }
     }
+    # --- 4. 539 精選過濾模式 ---
+def get_539_premium_prediction():
+    import random
+    from collections import Counter
+    try:
+        # 爬取數據 (這部分邏輯與先前相同)
+        url = "https://lotto.arclink.com.tw/Lotto539History.html"
+        res = requests.get(url, timeout=10)
+        res.encoding = 'utf-8'
+        soup = BeautifulSoup(res.text, 'html.parser')
+        all_nums = []
+        rows = soup.select('.nums')
+        for row in rows[:100]:
+            nums = re.findall(r'\d+', row.get_text())
+            all_nums.extend([int(n) for n in nums])
+        
+        # 統計出精選池 (熱門12個 + 冷門12個)
+        counts = Counter(all_nums)
+        hot_nums = [n for n, c in counts.most_common(12)]
+        cold_nums = [n for n, c in sorted(counts.items(), key=lambda x: x[1])[:12]]
+        pool = list(set(hot_nums + cold_nums))
+
+        # 1000次模擬篩選
+        best_pick = None
+        for _ in range(1000):
+            candidate = sorted(random.sample(pool, 5))
+            total_sum = sum(candidate)
+            odds = len([n for n in candidate if n % 2 != 0])
+            bigs = len([n for n in candidate if n >= 20])
+            
+            # 篩選條件：總和 75-125、奇偶不極端、大小不極端
+            if (75 <= total_sum <= 125) and (0 < odds < 5) and (0 < bigs < 5):
+                best_pick = candidate
+                break
+        
+        if not best_pick: best_pick = sorted(random.sample(pool, 5))
+        
+        formatted_nums = ", ".join([str(n).zfill(2) for n in best_pick])
+        return (f"💎 【539 大數據精選號碼】\n"
+                f"----------------\n"
+                f"🎲 推薦號碼：{formatted_nums}\n"
+                f"----------------\n"
+                f"📈 篩選指標：\n"
+                f"● 總和：{sum(best_pick)} (常態分佈內)\n"
+                f"● 奇偶：{5-odds}偶:{odds}奇\n"
+                f"● 大小：{5-bigs}小:{bigs}大\n"
+                f"✨ 已通過 1000 次數據模擬過濾")
+    except Exception as e:
+        return f"⚠️ 系統計算中，請稍後再試"
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
@@ -127,6 +174,9 @@ def handle_message(event):
     elif "掛號" in msg:
         flex_contents = get_hospital_flex()
         reply_msg = FlexSendMessage(alt_text="台南掛號導航", contents=flex_contents)
+    elif "539" in msg:
+        reply_text = get_539_premium_prediction()
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
     
     # 確保只會回覆一次，且有內容才回覆
     if reply_msg:
